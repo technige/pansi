@@ -16,13 +16,14 @@
 # limitations under the License.
 
 
-from pansi.codes import rgb, bg, x, rev
+from pansi.text import color, background_color, on_black, invert, reset
+
 
 print(f"""\
-{rgb('#040')}{bg.rgb('#0F0')} !"#$%&'()*+,-./0123456789:;<=>?
+{color('#040')}{background_color('#0F0')} !"#$%&'()*+,-./0123456789:;<=>?
 @ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]↑←
-{rev}@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]↑←{rev.off}
-{rgb('#0F0')}{bg.black} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█{rgb('#FF0')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█
-{rgb('#00F')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█{rgb('#F00')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█
-{rgb('#FFF')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█{rgb('#0FF')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█
-{rgb('#F0F')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█{rgb('#FF8000')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█{x}""")
+{invert}@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]↑←{~invert}
+{color('#0F0')}{on_black} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█{color('#FF0')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█
+{color('#00F')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█{color('#F00')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█
+{color('#FFF')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█{color('#0FF')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█
+{color('#F0F')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█{color('#FF8000')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█{reset}""")

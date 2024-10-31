@@ -21,8 +21,7 @@ from sys import stdin, stdout
 from termios import tcgetattr, tcsetattr, TCSAFLUSH, TIOCGWINSZ
 from tty import setcbreak
 
-from pansi.codes import ESC, CSI, cur, x, bold, faint, italic, rev, blink, strike, underline, BLACK, bg, RED, GREEN, \
-    YELLOW, BLUE, MAGENTA, CYAN, WHITE, black, red, green, yellow, blue, magenta, cyan, white
+from pansi.codes import ESC, CSI
 
 
 class Screen:
@@ -197,62 +196,3 @@ class Screen:
 
     def flush(self):
         self.cout.flush()
-
-
-def test_card(screen: Screen):
-    height, width = screen.size
-    screen.clear()
-    screen.write(f"TL{cur.hpos(width - 1)}TR")
-
-    screen.cur_pos = 24, 1
-    screen.write(f"{BLACK}{bg.black}     "
-                 f"{RED}{bg.red}     ")
-    screen.write(f"{GREEN}{bg.green}     ")
-    screen.write(f"{YELLOW}{bg.yellow}     ")
-    screen.write(f"{BLUE}{bg.blue}     ")
-    screen.write(f"{MAGENTA}{bg.magenta}     ")
-    screen.write(f"{CYAN}{bg.cyan}     ")
-    screen.write(f"{WHITE}{bg.white}     ")
-    screen.write(f"{black}{bg.BLACK}     ")
-    screen.write(f"{red}{bg.RED}     ")
-    screen.write(f"{green}{bg.GREEN}     ")
-    screen.write(f"{yellow}{bg.YELLOW}     ")
-    screen.write(f"{blue}{bg.BLUE}     ")
-    screen.write(f"{magenta}{bg.MAGENTA}     ")
-    screen.write(f"{cyan}{bg.CYAN}     ")
-    screen.write(f"{white}{bg.WHITE}     {x}")
-
-    if height == 24:
-        screen.write(cur.pos(height, 1), f"{bg.black}BL{x}")
-    else:
-        screen.write(cur.pos(height, 1), f"BL")
-    if height == 24 and width == 80:
-        screen.write(cur.pos(height, width - 1), f"{black}{bg.WHITE}BR{x}")
-    else:
-        screen.write(cur.pos(height, width - 1), f"BR")
-
-    for line in range(2, 24):
-        screen.cur_pos = line, 1
-        g = 11 * line - 9
-        screen.write(f"{faint}{line:02}{faint.off}{cur.hpos(79)}{bg.rgb(g, g, g)}  {bg}")
-
-    screen.write(cur.pos(2, 5), f" !\"#$%&'()*+,-./0123456789;:<=>?")
-    screen.write(cur.pos(3, 5), "@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_")
-    screen.write(cur.pos(4, 5), "`abcdefghijklmnopqrstuvwxyz{|}~")
-
-    screen.write(f"{cur.pos(6, 5)}Emphasis  : {bold}bold{bold.off} {faint}faint{faint.off} {italic}italic{italic.off}")
-    screen.write(f"{cur.pos(7, 5)}Underline : {underline}single{underline.off} {underline.double}double{underline.off}")
-    screen.write(f"{cur.pos(8, 5)}Blink     : {blink}slow{blink.off} {blink.fast}fast{blink.off}")
-    screen.write(f"{cur.pos(9, 5)}Reverse   : {rev}reverse{rev.off}")
-    screen.write(cur.pos(10, 5), f"Strike    : {strike}strike{strike.off}")
-
-    screen.flush()
-    screen.cur_pos = 10, 10
-    while True:
-        k = screen.read_key()
-        screen.write(f"{k!r} ")
-        screen.flush()
-
-
-if __name__ == "__main__":
-    Screen.wrapper(test_card)

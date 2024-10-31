@@ -16,202 +16,84 @@
 # limitations under the License.
 
 
-from collections.abc import Mapping
-
-
+# ------------- # -- # -- # ------------------------- # ---- # --------------------------------------------------------
 # C0 control codes
-BEL = "\x07"
-BS = "\x08"
-HT = "\x09"
-LF = "\x0A"
-FF = "\x0C"
-CR = "\x0D"
-ESC = "\x1B"
-
+# ------------- # -- # -- # ------------------------- # ---- # --------------------------------------------------------
+NUL = "\x00"    # ^@ |    | null                      |      | does nothing
+SOH = "\x01"    # ^A |    | start of header           | TC₁  | start of transmission header
+STX = "\x02"    # ^B |    | start of text             | TC₂  | start of transmission content
+ETX = "\x03"    # ^C |    | end of text               | TC₃  | SIGINT, end of transmission content
+EOT = "\x04"    # ^D |    | end of transmission       | TC₄  | EOF, end of transmission
+ENQ = "\x05"    # ^E |    | enquiry                   | TC₅  |
+ACK = "\x06"    # ^F |    | acknowledge               | TC₆  |
+BEL = "\x07"    # ^G | \a | bell                      |      | audio signal
+BS = "\x08"     # ^H | \b | backspace                 | FE₀  | move cursor left 1 cell
+HT = "\x09"     # ^I | \t | horizontal tab            | FE₁  | move cursor right to next multiple of 8
+LF = "\x0A"     # ^J | \n | line feed                 | FE₂  | newline
+VT = "\x0B"     # ^K | \v | vertical tab              | FE₃  |
+FF = "\x0C"     # ^L | \f | form feed                 | FE₄  | clear
+CR = "\x0D"     # ^M | \r | carriage return           | FE₅  | newline
+SO = "\x0E"     # ^N |    | shift out                 | LS₀  |
+SI = "\x0F"     # ^O |    | shift in                  | LS₁  |
+DLE = "\x10"    # ^P |    | data link escape          | TC₇  |
+DC1 = "\x11"    # ^Q |    | device control 1          | DC₁  | XON, resume transmission (e.g. buffer ready)
+DC2 = "\x12"    # ^R |    | device control 2          | DC₂  |
+DC3 = "\x13"    # ^S |    | device control 3          | DC₃  | XOFF, pause transmission (e.g. buffer full)
+DC4 = "\x14"    # ^T |    | device control 4          | DC₄  |
+NAK = "\x15"    # ^U |    | negative acknowledge      | TC₈  |
+SYN = "\x16"    # ^V |    | synchronous idle          | TC₉  |
+ETB = "\x17"    # ^W |    | end of transmission block | TC₁₀ | end of transmission block
+CAN = "\x18"    # ^X |    | cancel                    |      |
+EM = "\x19"     # ^Y |    | end of medium             |      |
+SUB = "\x1A"    # ^Z |    | substitute                |      | SIGTSTP
+ESC = "\x1B"    # ^[ |    | escape                    |      | escape sequence initiator
+FS = "\x1C"     # ^\ |    | file separator            | IS₄  | delimiter, SIGQUIT
+GS = "\x1D"     # ^] |    | group separator           | IS₃  | delimiter
+RS = "\x1E"     # ^^ |    | record separator          | IS₂  | delimiter
+US = "\x1F"     # ^_ |    | unit separator            | IS₁  | delimiter
+# ------------- # -- # -- # ------------------------- # ---- # --------------------------------------------------------
+# DEL only
+# ------------- # -- # -- # ------------------------- # ---- # --------------------------------------------------------
+DEL = "\x7F"              # delete                    |      |
+# ------------- # -- # -- # ------------------------- # ---- # --------------------------------------------------------
 # C1 control codes
-SS2 = f"{ESC}N"
-SS3 = f"{ESC}O"
-DCS = f"{ESC}P"
-CSI = f"{ESC}["
-ST = f"{ESC}\\"
-OSC = f"{ESC}]"
-SOS = f"{ESC}X"
-PM = f"{ESC}^"
-APC = f"{ESC}_"
+# ------------------ # -- # --------------------------- # ---- # ------------------------------------------------------
+PAD = f"{ESC}@"      # 80 | padding character           |      |
+HOP = f"{ESC}A"      # 81 | high octet preset           |      |
+BPH = f"{ESC}B"      # 82 | break permitted here        |      |
+NBH = f"{ESC}C"      # 83 | no break here               |      |
+IND = f"{ESC}D"      # 84 | index                       |      |
+NEL = f"{ESC}E"      # 85 | next line                   |      |
+SS2 = f"{ESC}N"      # 8E | single-shift 2              |      | en.wikipedia.org/wiki/ISO/IEC_2022#Shift_functions
+SS3 = f"{ESC}O"      # 8F | single-shift 3              |
+DCS = f"{ESC}P"      # 90 | device control string       |
+SOS = f"{ESC}X"      # 98 | start of string             |
+CSI = f"{ESC}["      # 9B | control sequence introducer |
+ST = f"{ESC}\\"      # 9C | string terminator           |
+OSC = f"{ESC}]"      # 9D | operating system command    |
+PM = f"{ESC}^"       # 9E | privacy message             |
+APC = f"{ESC}_"      # 9F | application program command |
+# ------------------ # -- # --------------------------- # ---- # ------------------------------------------------------
+
+# Translation table for C1 Control characters to equivalent 7-bit escape sequence.
+#
+# An 8-bit coded character in column 08 or 09 is equivalent to a 7-bit
+# coded ESCAPE sequence consisting of ESC followed by the character from
+# the corresponding row of columns 4 and 5 respectively.
+#
+# https://www.ecma-international.org/wp-content/uploads/ECMA-35_1st_edition_december_1971.pdf [8.2.2]
+#
+C1_CONTROL_TO_ESCAPE_SEQUENCE = str.maketrans(dict(zip(map(chr, range(0x80, 0xA0)),
+                                                       (f"\x1B{chr(x)}" for x in range(0x40, 0x60)))))
+
+# Other
 
 
-class CodeSet(Mapping, object):
-
-    def __init__(self, codes, default=None):
-        self.__codes = dict(codes)
-        self.__default = default
-
-    def __str__(self):
-        if self.__default:
-            return str(self.__codes[self.__default])
-        else:
-            return ""
-
-    def __getitem__(self, key):
-        # TODO: remove?
-        return self.__codes[key]
-
-    def __len__(self):
-        return len(self.__codes)    # pragma: no cover
-
-    def __iter__(self):
-        return iter(self.__codes)   # pragma: no cover
-
-    def __dir__(self):
-        return list(self.__codes)   # pragma: no cover
-
-    def __getattr__(self, name):
-        try:
-            return self.__codes[name]
-        except KeyError:
-            raise AttributeError(name)
-
-
-# SGR
-
-cur = CodeSet({
-    "up": (lambda n: f"{CSI}{n}A"),
-    "down": (lambda n: f"{CSI}{n}B"),
-    "fwd": (lambda n: f"{CSI}{n}C"),
-    "back": (lambda n: f"{CSI}{n}D"),
-    "nextln": (lambda n: f"{CSI}{n}E"),
-    "prevln": (lambda n: f"{CSI}{n}F"),
-    "hpos": (lambda column: f"{CSI}{column}G"),
-    "pos": (lambda row, column: f"{CSI}{row};{column}H"),
-})
-
-
-def hpos(column):
-    return f"{CSI}{column}G"
-
-
-def pos(row, column):
-    return f"{CSI}{row};{column}H"
-
-
-def sgr(*args):
-    return f"{CSI}{';'.join(map(str, args))}m"
-
-
-class RGB(object):
-
-    def __init__(self, ground):
-        self.ground = ground
-
-    def __call__(self, *args):
-        n_args = len(args)
-        if n_args == 1:
-            code = str(args[0])
-            if code.startswith("#"):
-                code_len = len(code)
-                if code_len == 4:
-                    # '#XXX'
-                    r = int(code[1], 16) * 17
-                    g = int(code[2], 16) * 17
-                    b = int(code[3], 16) * 17
-                elif code_len == 7:
-                    # '#XXXXXX'
-                    r = int(code[1:3], 16)
-                    g = int(code[3:5], 16)
-                    b = int(code[5:7], 16)
-                else:
-                    raise ValueError(f"Unparseable hex code {code!r}")
-                return sgr(self.ground, 2, r, g, b)
-            else:
-                raise ValueError(f"Unparseable color code {args[0]!r}")
-        elif n_args == 3:
-            return sgr(self.ground, 2, *args)
-        else:
-            raise TypeError("Unusable color arguments")
-
-
-black = sgr(30)
-red = sgr(31)
-green = sgr(32)
-yellow = sgr(33)
-blue = sgr(34)
-magenta = sgr(35)
-cyan = sgr(36)
-white = sgr(37)
-rgb = RGB(38)
-BLACK = sgr(90)
-RED = sgr(91)
-GREEN = sgr(92)
-YELLOW = sgr(93)
-BLUE = sgr(94)
-MAGENTA = sgr(95)
-CYAN = sgr(96)
-WHITE = sgr(97)
-
-# Background
-bg = CodeSet({
-    "black": sgr(40),
-    "red": sgr(41),
-    "green": sgr(42),
-    "yellow": sgr(43),
-    "blue": sgr(44),
-    "magenta": sgr(45),
-    "cyan": sgr(46),
-    "white": sgr(47),
-    "rgb": RGB(48),
-    "default": sgr(49),
-    "BLACK": sgr(100),
-    "RED": sgr(101),
-    "GREEN": sgr(102),
-    "YELLOW": sgr(103),
-    "BLUE": sgr(104),
-    "MAGENTA": sgr(105),
-    "CYAN": sgr(106),
-    "WHITE": sgr(107),
-}, default="default")
-
-# Reversed colours
-rev = CodeSet({
-    "on": sgr(7),
-    "off": sgr(27),
-}, default="on")
-
-# Weight
-bold = CodeSet({
-    "on": sgr(1),
-    "off": sgr(22),
-}, default="on")
-faint = CodeSet({
-    "on": sgr(2),
-    "off": sgr(22),
-}, default="on")
-
-# Style
-italic = CodeSet({
-    "on": sgr(3),
-    "off": sgr(23),
-}, default="on")
-
-# Underline
-underline = CodeSet({
-    "single": sgr(4),
-    "double": sgr(21),
-    "off": sgr(24),
-    "rgb": RGB(58),
-}, default="single")
-
-# Blink
-blink = CodeSet({
-    "slow": sgr(5),
-    "fast": sgr(6),
-    "off": sgr(25),
-}, default="slow")
-
-# Strike through
-strike = CodeSet({
-    "on": sgr(9),
-    "off": sgr(29),
-}, default="on")
-
-# Reset
-x = sgr(0)
+# Newlines
+#
+# https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-5/#G10213
+CRLF = f"{CR}{LF}"
+C1_NEL = "\x85"
+LS = "\u2028"
+PS = "\u2029"
+UNICODE_NEWLINES = {CR, LF, CRLF, NEL, C1_NEL, VT, FF, LS, PS}

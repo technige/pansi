@@ -22,15 +22,12 @@ from base64 import b64encode
 from fcntl import ioctl
 from io import BytesIO
 from math import ceil
-from os import path
 from sys import stdin, stdout
 from termios import TIOCGWINSZ, tcgetattr, TCSADRAIN, tcsetattr
 from tty import setcbreak
 from uuid import uuid4
 
 from PIL import Image
-
-from pansi.net import download, URI
 
 
 class Terminal:
@@ -100,19 +97,6 @@ class Terminal:
 
 
 class TerminalImage:
-
-    @classmethod
-    def load(cls, uri):
-        if ":" in uri:
-            uri = URI.parse(uri)
-        else:
-            uri = URI(scheme="file", path=path.abspath(uri))
-        if uri.scheme == "file":
-            return cls(Image.open(uri.path))
-        elif uri.scheme in ("http", "https"):
-            return cls(Image.open(download(uri)))
-        else:
-            raise ValueError(f"Unsupported URI scheme {uri.scheme!r}")
 
     def __init__(self, image, uri=None):
         self.image = image
@@ -292,24 +276,17 @@ class BlockImage:
         return fragments
 
 
-def print_image(image, force_blocks=False):
-    screen = Terminal()
-    if isinstance(image, Image.Image):
-        term_image = TerminalImage(image)
-    else:
-        term_image = TerminalImage.load(image)
-    if force_blocks or not Terminal.supports_graphics_protocol():
-        term_image.to_fit(screen).print_blocks(screen)
-    else:
-        term_image.to_fit(screen).print_pixels()
-
-
 def main():
     parser = ArgumentParser()
     parser.add_argument("-B", "--force-blocks", action="store_true")
-    parser.add_argument("image")
+    parser.add_argument("filename")
     args = parser.parse_args()
-    print_image(args.image, force_blocks=args.force_blocks)
+    screen = Terminal()
+    term_image = TerminalImage(Image.open(args.filename))
+    if args.force_blocks or not Terminal.supports_graphics_protocol():
+        term_image.to_fit(screen).print_blocks(screen)
+    else:
+        term_image.to_fit(screen).print_pixels()
 
 
 if __name__ == '__main__':

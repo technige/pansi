@@ -25,8 +25,7 @@ closely as possible to CSS rules and properties, for ease of use.
 Let's start with something simple. The following example will render the word
 "world" in green:
 
-```python
->>> from pansi.text import green
->>> print(f"Hello, {green}world{~green}!")
-Hello, world!
-```
+<pre style="color:silver;background-color:black"><code>&gt;&gt;&gt; from pansi.text import green
+&gt;&gt;&gt; print(f"Hello, {green}world{~green}!")
+Hello, <span style="color:green">world</span>!
+</code></pre>

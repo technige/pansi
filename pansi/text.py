@@ -16,9 +16,16 @@
 # limitations under the License.
 
 
+"""
+``pansi.text`` – coloured and styled text
+=========================================
+
+The ``pansi.text`` module contains functions to enhance text with colours
+and styles using ANSI escape sequences.
+"""
+
 from collections.abc import Sequence
 from io import StringIO
-from math import cos, sin, tau
 from re import compile as re_compile
 from typing import Iterable
 from unicodedata import category, east_asian_width
@@ -29,7 +36,8 @@ from pansi.codes import (
     ESC, CSI, C1_CONTROL_TO_ESCAPE_SEQUENCE,
     DEL, APC,
 )
-from pansi._math import clamp, linear_to_gamma
+from pansi.color import WEB_PALETTE, decode_hex_color, rgb
+
 
 # Patterns
 _PADDED_SEGMENT_BREAK = re_compile(r"[ \t]*(\r\n|\n|\r)[ \t]*")
@@ -43,188 +51,80 @@ _TEXT_TO_SUBSCRIPT = str.maketrans(dict(zip("()+-0123456789=aehklmnopst",
 _TEXT_TO_SUPERSCRIPT = str.maketrans(dict(zip("()+-0123456789=in",
                                               "⁽⁾⁺⁻⁰¹²³⁴⁵⁶⁷⁸⁹⁼ⁱⁿ")))
 
-# SGR parameters for named web colours
-#
-# The original 16 colours are derived from CGA, and so we map them here
-# to the ANSI terminal equivalents. In many cases, the actual terminal
-# implementations will render colours that differ from the precise
-# definitions given for web colours, so this is a trade-off. Given the
-# lack of importance named colours have in contemporary web design, it
-# is arguably better to align them more closely with the intended design
-# of this module: ANSI terminal colours.
-#
-#   FG  BG  Description       Web color name(s)  CGA
-#   --  --  ----------------  -----------------  ----
-#   30  40  "dark black"      black              #000
-#   31  41  "dark red"        maroon             #A00
-#   32  42  "dark green"      green              #0A0
-#   33  43  "dark yellow"     olive              #A50
-#   34  44  "dark blue"       navy               #00A
-#   35  45  "dark magenta"    purple             #A0A
-#   36  46  "dark cyan"       teal               #0AA
-#   37  47  "dark white"      silver             #AAA
-#   90 100  "bright black"    gray, grey         #555
-#   91 101  "bright red"      red                #F55
-#   92 102  "bright green"    lime               #5F5
-#   93 103  "bright yellow"   yellow             #FF5
-#   94 104  "bright blue"     blue               #55F
-#   95 105  "bright magenta"  fuchsia, magenta   #F5F
-#   96 106  "bright cyan"     aqua, cyan         #5FF
-#   97 107  "bright white"    white              #FFF
-#
-# https://en.wikipedia.org/wiki/Color_Graphics_Adapter#Color_palette
-# https://int10h.org/blog/2022/06/ibm-5153-color-true-cga-palette/
-# https://www.w3.org/TR/REC-html40/types.html#h-6.5
-#
-_NAMED_COLOR_PARAMETERS = {
-    "aliceblue": (240, 248, 255),
-    "antiquewhite": (250, 235, 215),
-    "aqua": 96,
-    "aquamarine": (127, 255, 212),
-    "azure": (240, 255, 255),
-    "beige": (245, 245, 220),
-    "bisque": (255, 228, 196),
-    "black": 30,
-    "blanchedalmond": (255, 235, 205),
-    "blue": 94,
-    "blueviolet": (138, 43, 226),
-    "brown": (165, 42, 42),
-    "burlywood": (222, 184, 135),
-    "cadetblue": (95, 158, 160),
-    "chartreuse": (127, 255, 0),
-    "chocolate": (210, 105, 30),
-    "coral": (255, 127, 80),
-    "cornflowerblue": (100, 149, 237),
-    "cornsilk": (255, 248, 220),
-    "crimson": (220, 20, 60),
-    "cyan": 96,
-    "darkblue": (0, 0, 139),
-    "darkcyan": (0, 139, 139),
-    "darkgoldenrod": (184, 134, 11),
-    "darkgray": (169, 169, 169),
-    "darkgreen": (0, 100, 0),
-    "darkgrey": (169, 169, 169),
-    "darkkhaki": (189, 183, 107),
-    "darkmagenta": (139, 0, 139),
-    "darkolivegreen": (85, 107, 47),
-    "darkorange": (255, 140, 0),
-    "darkorchid": (153, 50, 204),
-    "darkred": (139, 0, 0),
-    "darksalmon": (233, 150, 122),
-    "darkseagreen": (143, 188, 143),
-    "darkslateblue": (72, 61, 139),
-    "darkslategray": (47, 79, 79),
-    "darkslategrey": (47, 79, 79),
-    "darkturquoise": (0, 206, 209),
-    "darkviolet": (148, 0, 211),
-    "deeppink": (255, 20, 147),
-    "deepskyblue": (0, 191, 255),
-    "dimgray": (105, 105, 105),
-    "dimgrey": (105, 105, 105),
-    "dodgerblue": (30, 144, 255),
-    "firebrick": (178, 34, 34),
-    "floralwhite": (255, 250, 240),
-    "forestgreen": (34, 139, 34),
-    "fuchsia": 95,
-    "gainsboro": (220, 220, 220),
-    "ghostwhite": (248, 248, 255),
-    "gold": (255, 215, 0),
-    "goldenrod": (218, 165, 32),
-    "gray": 90,
-    "green": 32,
-    "greenyellow": (173, 255, 47),
-    "grey": 90,
-    "honeydew": (240, 255, 240),
-    "hotpink": (255, 105, 180),
-    "indianred": (205, 92, 92),
-    "indigo": (75, 0, 130),
-    "ivory": (255, 255, 240),
-    "khaki": (240, 230, 140),
-    "lavender": (230, 230, 250),
-    "lavenderblush": (255, 240, 245),
-    "lawngreen": (124, 252, 0),
-    "lemonchiffon": (255, 250, 205),
-    "lightblue": (173, 216, 230),
-    "lightcoral": (240, 128, 128),
-    "lightcyan": (224, 255, 255),
-    "lightgoldenrodyellow": (250, 250, 210),
-    "lightgray": (211, 211, 211),
-    "lightgreen": (144, 238, 144),
-    "lightgrey": (211, 211, 211),
-    "lightpink": (255, 182, 193),
-    "lightsalmon": (255, 160, 122),
-    "lightseagreen": (32, 178, 170),
-    "lightskyblue": (135, 206, 250),
-    "lightslategray": (119, 136, 153),
-    "lightslategrey": (119, 136, 153),
-    "lightsteelblue": (176, 196, 222),
-    "lightyellow": (255, 255, 224),
-    "lime": 92,
-    "limegreen": (50, 205, 50),
-    "linen": (250, 240, 230),
-    "magenta": 95,
-    "maroon": 31,
-    "mediumaquamarine": (102, 205, 170),
-    "mediumblue": (0, 0, 205),
-    "mediumorchid": (186, 85, 211),
-    "mediumpurple": (147, 112, 219),
-    "mediumseagreen": (60, 179, 113),
-    "mediumslateblue": (123, 104, 238),
-    "mediumspringgreen": (0, 250, 154),
-    "mediumturquoise": (72, 209, 204),
-    "mediumvioletred": (199, 21, 133),
-    "midnightblue": (25, 25, 112),
-    "mintcream": (245, 255, 250),
-    "mistyrose": (255, 228, 225),
-    "moccasin": (255, 228, 181),
-    "navajowhite": (255, 222, 173),
-    "navy": 34,
-    "oldlace": (253, 245, 230),
-    "olive": 33,
-    "olivedrab": (107, 142, 35),
-    "orange": (255, 165, 0),
-    "orangered": (255, 69, 0),
-    "orchid": (218, 112, 214),
-    "palegoldenrod": (238, 232, 170),
-    "palegreen": (152, 251, 152),
-    "paleturquoise": (175, 238, 238),
-    "palevioletred": (219, 112, 147),
-    "papayawhip": (255, 239, 213),
-    "peachpuff": (255, 218, 185),
-    "peru": (205, 133, 63),
-    "pink": (255, 192, 203),
-    "plum": (221, 160, 221),
-    "powderblue": (176, 224, 230),
-    "purple": 35,
-    "rebeccapurple": (102, 51, 153),
-    "red": 91,
-    "rosybrown": (188, 143, 143),
-    "royalblue": (65, 105, 225),
-    "saddlebrown": (139, 69, 19),
-    "salmon": (250, 128, 114),
-    "sandybrown": (244, 164, 96),
-    "seagreen": (46, 139, 87),
-    "seashell": (255, 245, 238),
-    "sienna": (160, 82, 45),
-    "silver": 37,
-    "skyblue": (135, 206, 235),
-    "slateblue": (106, 90, 205),
-    "slategray": (112, 128, 144),
-    "slategrey": (112, 128, 144),
-    "snow": (255, 250, 250),
-    "springgreen": (0, 255, 127),
-    "steelblue": (70, 130, 180),
-    "tan": (210, 180, 140),
-    "teal": 36,
-    "thistle": (216, 191, 216),
-    "tomato": (255, 99, 71),
-    "turquoise": (64, 224, 208),
-    "violet": (238, 130, 238),
-    "wheat": (245, 222, 179),
-    "white": 97,
-    "whitesmoke": (245, 245, 245),
-    "yellow": 93,
-    "yellowgreen": (154, 205, 50),
+#: Dictionary mapping the original set of named web colors to a pair of ANSI
+#: terminal colour codes corresponding to foreground and background selectors.
+#:
+#: The original sixteen web colours were derived from CGA, an IBM graphics
+#: card that established a standard for colour palettes used in computer
+#: displays. Within those sixteen colours were eight low intensity colours
+#: and eight high intensity colours. These in turn map to the sixteen base
+#: colours still used in terminal emulators today.
+#:
+#: In practice, terminal emulation software renders a range of different
+#: shades for these colours, although the selector codes remain the same.
+#:
+#: +-----------+------------------------+------------------+----------+
+#: | Selector  |                        |                  |          |
+#: +-----+-----+                        |                  |          |
+#: |  FG |  BG | Description            | Web color names  |    CGA   |
+#: +=====+=====+========================+==================+==========+
+#: |  30 |  40 | low intensity black    | black            | ``#000`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  31 |  41 | low intensity red      | maroon           | ``#A00`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  32 |  42 | low intensity green    | green            | ``#0A0`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  33 |  43 | low intensity yellow   | olive            | ``#A50`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  34 |  44 | low intensity blue     | navy             | ``#00A`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  35 |  45 | low intensity magenta  | purple           | ``#A0A`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  36 |  46 | low intensity cyan     | teal             | ``#0AA`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  37 |  47 | low intensity white    | silver           | ``#AAA`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  90 | 100 | high intensity black   | grey, gray       | ``#555`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  91 | 101 | high intensity red     | red              | ``#F55`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  92 | 102 | high intensity green   | lime             | ``#5F5`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  93 | 103 | high intensity yellow  | yellow           | ``#FF5`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  94 | 104 | high intensity blue    | blue             | ``#55F`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  95 | 105 | high intensity magenta | fuchsia, magenta | ``#F5F`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  96 | 106 | high intensity cyan    | aqua, cyan       | ``#5FF`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  97 | 107 | high intensity white   | white            | ``#FFF`` |
+#: +-----+-----+------------------------+------------------+----------+
+#:
+#: - https://en.wikipedia.org/wiki/Color_Graphics_Adapter#Color_palette
+#: - https://int10h.org/blog/2022/06/ibm-5153-color-true-cga-palette/
+#: - https://www.w3.org/TR/REC-html40/types.html#h-6.5
+#:
+CGA_PALETTE = {
+    "aqua": (96, 106),      # alias for "cyan"
+    "black": (30, 40),
+    "blue": (94, 104),
+    "cyan": (96, 106),      # alias for "aqua"
+    "fuchsia": (95, 105),   # alias for "magenta"
+    "gray": (90, 100),      # alias for "grey"
+    "green": (32, 42),
+    "grey": (90, 100),      # alias for "gray"
+    "lime": (92, 102),
+    "magenta": (95, 105),   # alias for "fuchsia"
+    "maroon": (31, 41),
+    "navy": (34, 44),
+    "olive": (33, 43),
+    "purple": (35, 45),
+    "red": (91, 101),
+    "silver": (37, 47),
+    "teal": (36, 46),
+    "white": (97, 107),
+    "yellow": (93, 103),
 }
 
 
@@ -263,47 +163,49 @@ class SGR:
             return self
 
 
-def color_sgr(value, background=False) -> SGR:
-    """ Resolve a colour value string into an RGB 3-tuple or ANSI
-    integer colour code.
+def color_sgr(value, background=False, web_palette_only=False) -> SGR:
+    """ Construct an SGR object for a given color value. The input can be any
+    of a hex colour value, a named colour, or an RGB tuple composed of numbers
+    and/or percentages.
 
-    Note: alpha values are ignored and discarded.
+    Note: alpha values are accepted, but ignored and discarded.
 
     :param value:
     :param background:
+    :param web_palette_only: if true, use the web palette for all named
+        colours instead of falling back to terminal palette for basic
+        CGA colours
     :return: SGR
     """
     default = 49 if background else 39
-    value = str(value).strip()
-    if value.startswith("#"):
-        code_len = len(value)
-        if code_len in {4, 5}:
-            # '#RGB' or '#RGBA'
-            r = int(value[1], 16) * 17
-            g = int(value[2], 16) * 17
-            b = int(value[3], 16) * 17
-            return SGR(48 if background else 38, 2, r, g, b, reset=default)
-        elif code_len in {7, 9}:
-            # '#RRGGBB' or '#RRGGBBAA'
-            r = int(value[1:3], 16)
-            g = int(value[3:5], 16)
-            b = int(value[5:7], 16)
-            return SGR(48 if background else 38, 2, r, g, b, reset=default)
-        else:
-            raise ValueError(f"Unusable hex color code {value!r}")
+    if isinstance(value, tuple):
+        value = rgb(*value)
     else:
-        try:
-            param = _NAMED_COLOR_PARAMETERS[value.lower()]
-        except KeyError:
-            raise ValueError(f"Unrecognised color name {value!r}")
+        value = str(value).strip()
+    if value.startswith("#"):
+        c = decode_hex_color(value)
+        return SGR(48 if background else 38, 2,
+                   c[0], c[1], c[2], reset=default)
+    else:
+        name = value.lower()
+        if name in CGA_PALETTE and not web_palette_only:
+            fg, bg = CGA_PALETTE[name]
+            return SGR(bg if background else fg, reset=default)
+        elif name in WEB_PALETTE:
+            r, g, b = WEB_PALETTE[name]
+            return SGR(48 if background else 38, 2, r, g, b, reset=default)
         else:
-            if isinstance(param, int):
-                return SGR(param + 10 if background else param, reset=default)
-            else:
-                return SGR(48 if background else 38, 2, *param, reset=default)
+            raise ValueError(f"Unrecognised color name {value!r}")
 
 
-# Reset
+#: The *reset* SGR sequence removes all current styling effects and returns the
+#: text to its default appearance. Given that the ability to nest sequences is
+#: less flexible and less visible than the equivalent in (for example) HTML,
+#: this sequence is useful in many applications to undo a stack of effects.
+#:
+#: Note that *reset* also has an equivalent implicit form, ``f"{CSI}m``, which
+#: includes no parameters, but operates identically. The explicit form is
+#: preferred here for clarity and compatibility.
 reset = f"{CSI}0m"
 
 # Font weight and style
@@ -354,117 +256,26 @@ on_aqua = on_cyan = color_sgr("aqua", background=True)
 on_white = color_sgr("white", background=True)
 
 
-def color(value) -> str:
+def color(value, web_palette_only=False) -> str:
     """ Generate ANSI escape code string for given foreground colour value.
     """
     try:
-        sgr = color_sgr(value)
+        sgr = color_sgr(value, web_palette_only=web_palette_only)
     except ValueError:
         return ""
     else:
         return str(sgr)
 
 
-def background_color(value) -> str:
+def background_color(value, web_palette_only=False) -> str:
     """ Generate ANSI escape code string for given background colour value.
     """
     try:
-        sgr = color_sgr(value, background=True)
+        sgr = color_sgr(value, background=True, web_palette_only=web_palette_only)
     except ValueError:
         return ""
     else:
         return str(sgr)
-
-
-def rgb(red, green, blue, alpha=None) -> str:
-    r""" Generate a color value string from component RGB values.
-
-    The red, green and blue values represent their respective colour
-    channels. Each value can be represented as a number between 0 and
-    255, a percentage string between '0%' and '100%', the keyword 'none',
-    or an actual None value (the latter two of which are equivalent to 0).
-
-    The alpha value represents the alpha channel (transparency). This can
-    be supplied as a number between 0 and 1, a percentage string between
-    '0%' and '100%', the keyword 'none' or a None value. Here, 'none' can
-    be used to explicitly specify no alpha channel (which in effect gives
-    100% opacity).
-
-    :param red: red channel
-    :param green: green channel
-    :param blue: blue channel
-    :param alpha: alpha channel (transparency)
-    :return: RGB hex string value in either '#RRGGBB' or '#RRGGBBAA' form
-    """
-    red = round(clamp(red, (0, 255)))
-    green = round(clamp(green, (0, 255)))
-    blue = round(clamp(blue, (0, 255)))
-    if str(alpha).lower() == "none":
-        return f"#{red:02X}{green:02X}{blue:02X}"
-    else:
-        alpha = round(255 * clamp(alpha, (0, 1)))
-        return f"#{red:02X}{green:02X}{blue:02X}{alpha:02X}"
-
-
-def hsl(hue, saturation, lightness, alpha=None):
-    raise NotImplementedError  # TODO
-
-
-def hwb(hue, whiteness, blackness, alpha=None):
-    raise NotImplementedError  # TODO
-
-
-def lab(l, a, b, alpha=None):
-    raise NotImplementedError  # TODO
-
-
-def lch(l, c, h, alpha=None):
-    raise NotImplementedError  # TODO
-
-
-def oklab(lightness, a, b, alpha=None):
-    r""" Generate a color value string from component OkLab values.
-
-    :param lightness:
-    :param a:
-    :param b:
-    :param alpha:
-    :returns:
-    """
-    # TODO: Percent reference range
-    #   for a and b: -100% = -0.4, 100% = 0.4
-    lightness = clamp(lightness, (0, 1))
-    l = (lightness + 0.3963377774 * a + 0.2158037573 * b) ** 3
-    m = (lightness - 0.1055613458 * a - 0.0638541728 * b) ** 3
-    s = (lightness - 0.0894841775 * a - 1.2914855480 * b) ** 3
-
-    # Convert linear RGB to sRGB
-    r = +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s
-    g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s
-    b = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
-
-    # Scale RGB values and
-    # hand off to rgb function
-    return rgb(255 * linear_to_gamma(r),
-               255 * linear_to_gamma(g),
-               255 * linear_to_gamma(b),
-               alpha=alpha)
-
-
-def oklch(lightness, chroma, hue, alpha=None):
-    r""" Generate a color value string from component OkLCH values.
-
-    :param lightness:
-    :param chroma:
-    :param hue: angular hue, measured in degrees
-    :param alpha:
-    :returns:
-    """
-    chroma = clamp(chroma, (0, 0.4))  # TODO: resolve percentages but allow overflow
-    hue_rad = hue * tau / 360  # Convert from degrees to radians (TODO: allow other angular units)
-    a = chroma * cos(hue_rad)
-    b = chroma * sin(hue_rad)
-    return oklab(lightness, a, b, alpha=alpha)
 
 
 def font_weight(value) -> str:

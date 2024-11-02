@@ -1,0 +1,3 @@
+python-docs-theme
+sphinx
+sphinx-design

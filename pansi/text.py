@@ -130,7 +130,7 @@ CGA_PALETTE = {
 
 class SGR:
     """ The control sequence '[CSI]{parameters}m' is known as 'Select
-    Graph Rendition' or 'SGR'. This is used to control display attributes
+    Graphic Rendition' or 'SGR'. This is used to control display attributes
     such as colour and text style in terminals that support this (which
     most modern terminals do).
     """

@@ -129,9 +129,9 @@ CGA_PALETTE = {
 
 
 class SGR:
-    """ The control sequence '[CSI]{parameters}m' is known as 'Select
-    Graphic Rendition' or 'SGR'. This is used to control display attributes
-    such as colour and text style in terminals that support this (which
+    """ The control sequence ``f'{CSI}{params}m'`` is known as 'Select Graphic
+    Rendition' or 'SGR'. This sequence is used to control display attributes
+    such as colour and text style in terminals that support doing so (which
     most modern terminals do).
     """
 
@@ -166,7 +166,8 @@ class SGR:
 def color_sgr(value, background=False, web_palette_only=False) -> SGR:
     """ Construct an SGR object for a given color value. The input can be any
     of a hex colour value, a named colour, or an RGB tuple composed of numbers
-    and/or percentages.
+    and/or percentages. The string value ``'default'`` can also be passed to
+    explicitly select the terminal default colour.
 
     Note: alpha values are accepted, but ignored and discarded.
 
@@ -188,7 +189,9 @@ def color_sgr(value, background=False, web_palette_only=False) -> SGR:
                    c[0], c[1], c[2], reset=default)
     else:
         name = value.lower()
-        if name in CGA_PALETTE and not web_palette_only:
+        if name == "default":
+            return SGR(default)
+        elif name in CGA_PALETTE and not web_palette_only:
             fg, bg = CGA_PALETTE[name]
             return SGR(bg if background else fg, reset=default)
         elif name in WEB_PALETTE:

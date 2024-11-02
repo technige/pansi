@@ -1,8 +1,8 @@
 # Pansi
 
-Pansi is a clean and simple library for working with text and graphics in the
-terminal, using ANSI escape sequences for rendering. The library provides
-the following modules:
+Pansi is a text mode rendering library. It provides a clean and simple
+interface for working with text and graphics in the terminal, using ANSI escape
+sequences for rendering. The library provides the following modules:
 
 - `pansi.text` -- text colouring and styling
 - `pansi.image` -- terminal-based image rendering

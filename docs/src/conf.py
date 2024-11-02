@@ -19,14 +19,8 @@ author = 'Nigel Small'
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
-    "myst_parser",
     "sphinx.ext.autodoc",
-]
-autodoc2_packages = [
-    {
-        "path": "../../pansi",
-        "auto_mode": True,
-    }
+    "sphinx.ext.todo",
 ]
 
 templates_path = ['_templates']
@@ -38,3 +32,6 @@ exclude_patterns = []
 
 html_theme = 'python_docs_theme'
 html_static_path = ['_static']
+
+# Option to enable 'sphinx.ext.todo' extension
+todo_include_todos = True

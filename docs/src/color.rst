@@ -1,6 +1,6 @@
-====================
-``pansi.color`` -- ?
-====================
+=================================================================
+``pansi.color`` -- Colour conversion and general colour functions
+=================================================================
 
 .. module:: pansi.color
 
@@ -10,17 +10,21 @@ closely with the colour functions available in CSS, allowing both numeric and
 percentage arguments (the latter expressed as strings).
 
 All such functions allow an optional ``alpha`` argument to be passed,
-denoting transparency, and return hex strings of the form `'#RRGGBB'` or
-`'#RRGGBBAA'` (depending on whether transparency was specified).
+denoting transparency, and return hex strings of the form ``'#RRGGBB'`` or
+``'#RRGGBBAA'`` (depending on whether transparency was specified).
 
 Beyond these, several general purpose functions that relate to colour
 management and conversion are also included, along with a dictionary mapping
 web colour names to (red, green, blue) component triples.
 
+.. seealso:: For functions that apply colour to text, see the
+    :py:mod:`pansi.text` module.
+
 
 RGB
 ===
 .. autofunction:: rgb
+.. autofunction:: decode_hex_color
 
 .. seealso::
 
@@ -29,7 +33,7 @@ RGB
 
 CSS Named Colors
 ================
-.. autodata:: WEB_PALETTE
+.. data:: WEB_PALETTE
 
 .. seealso::
 

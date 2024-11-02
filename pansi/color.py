@@ -58,7 +58,7 @@ def decode_hex_color(value):
 
 
 def rgb(red, green, blue, alpha=None) -> str:
-    r""" Generate a hex color value string from component RGB values.
+    r""" Generate a hex colour value string from component RGB values.
 
     The red, green and blue values represent their respective colour
     channels. Each value can be represented as a number between 0 and
@@ -89,23 +89,43 @@ def rgb(red, green, blue, alpha=None) -> str:
 
 
 def hsl(hue, saturation, lightness, alpha=None) -> str:
-    raise NotImplementedError  # TODO
+    """ Generate a hex colour value string from component RGB values.
+
+    .. todo::
+        Not yet implemented
+    """
+    raise NotImplementedError
 
 
 def hwb(hue, whiteness, blackness, alpha=None) -> str:
-    raise NotImplementedError  # TODO
+    """ Generate a hex colour value string from component HWB values.
+
+    .. todo::
+        Not yet implemented
+    """
+    raise NotImplementedError
 
 
 def lab(lightness, a, b, alpha=None) -> str:
-    raise NotImplementedError  # TODO
+    """ Generate a hex colour value string from component CIE Lab values.
+
+    .. todo::
+        Not yet implemented
+    """
+    raise NotImplementedError
 
 
 def lch(lightness, chroma, hue, alpha=None) -> str:
-    raise NotImplementedError  # TODO
+    """ Generate a hex colour value string from component CIE LCH values.
+
+    .. todo::
+        Not yet implemented
+    """
+    raise NotImplementedError
 
 
 def oklab(lightness, a, b, alpha=None) -> str:
-    r""" Generate a color value string from component OkLab values.
+    r""" Generate a hex colour value string from component OkLab values.
 
     :param lightness:
     :param a:
@@ -134,7 +154,7 @@ def oklab(lightness, a, b, alpha=None) -> str:
 
 
 def oklch(lightness, chroma, hue, alpha=None) -> str:
-    r""" Generate a color value string from component OkLCH values.
+    r""" Generate a hex colour value string from component Oklch values.
 
     :param lightness:
     :param chroma:

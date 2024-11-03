@@ -33,8 +33,9 @@ from unicodedata import category, east_asian_width
 
 from pansi.codes import (
     BS, HT, CR, LF, CRLF, UNICODE_NEWLINES,
-    ESC, CSI, C1_CONTROL_TO_ESCAPE_SEQUENCE,
-    DEL, APC,
+    ESC, CSI, C1_CONTROL_TO_ESC_SEQUENCE,
+    DEL, APC, SGR, reset, bold, light, italic,
+    underline, double_underline, overline, line_through, blink,
 )
 from pansi.color import WEB_PALETTE, decode_hex_color, rgb
 
@@ -128,43 +129,8 @@ CGA_PALETTE = {
 }
 
 
-class SGR:
-    """ The control sequence ``f'{CSI}{params}m'`` is known as 'Select Graphic
-    Rendition' or 'SGR'. This sequence is used to control display attributes
-    such as colour and text style in terminals that support doing so (which
-    most modern terminals do).
-    """
-
-    def __init__(self, *parameters, reset=None):
-        self.parameters = parameters
-        if not reset:
-            self.reset = ()
-        elif isinstance(reset, tuple):
-            self.reset = reset
-        else:
-            self.reset = (reset,)
-
-    def __repr__(self):
-        args = list(map(repr, self.parameters))
-        if self.reset:
-            if len(self.reset) == 1:
-                args.append(f"reset={self.reset[0]!r}")
-            else:
-                args.append(f"reset={self.reset!r}")
-        return f"{type(self).__name__}({', '.join(args)})"
-
-    def __str__(self):
-        return f"{CSI}{';'.join(map(str, self.parameters))}m"
-
-    def __invert__(self):
-        if self.reset:
-            return self.__class__(*self.reset, reset=self.parameters)
-        else:
-            return self
-
-
-def color_sgr(value, background=False, web_palette_only=False) -> SGR:
-    """ Construct an SGR object for a given color value. The input can be any
+def _color_sgr(value, background=False, web_palette_only=False) -> SGR:
+    """ Construct an :py:class:`pansi.codes.SGR` object for a given color value. The input can be any
     of a hex colour value, a named colour, or an RGB tuple composed of numbers
     and/or percentages. The string value ``'default'`` can also be passed to
     explicitly select the terminal default colour.
@@ -201,69 +167,11 @@ def color_sgr(value, background=False, web_palette_only=False) -> SGR:
             raise ValueError(f"Unrecognised color name {value!r}")
 
 
-#: The *reset* SGR sequence removes all current styling effects and returns the
-#: text to its default appearance. Given that the ability to nest sequences is
-#: less flexible and less visible than the equivalent in (for example) HTML,
-#: this sequence is useful in many applications to undo a stack of effects.
-#:
-#: Note that *reset* also has an equivalent implicit form, ``f"{CSI}m``, which
-#: includes no parameters, but operates identically. The explicit form is
-#: preferred here for clarity and compatibility.
-reset = f"{CSI}0m"
-
-# Font weight and style
-bold = SGR(1, reset=22)
-light = SGR(2, reset=22)
-italic = SGR(3, reset=23)
-underline = SGR(4, reset=24)
-blink = SGR(5, reset=25)
-invert = SGR(7, reset=27)
-line_through = SGR(9, reset=29)
-double_underline = SGR(21, reset=24)
-overline = SGR(53, reset=55)
-
-# Foreground SGRs for original 16 CGA/web colours
-black = color_sgr("black")
-maroon = color_sgr("maroon")
-green = color_sgr("green")
-olive = color_sgr("olive")
-navy = color_sgr("navy")
-purple = color_sgr("purple")
-teal = color_sgr("teal")
-silver = color_sgr("silver")
-gray = grey = color_sgr("gray")
-red = color_sgr("red")
-lime = color_sgr("lime")
-yellow = color_sgr("yellow")
-blue = color_sgr("blue")
-fuchsia = magenta = color_sgr("fuchsia")
-aqua = cyan = color_sgr("aqua")
-white = color_sgr("white")
-
-# Background SGRs for original 16 CGA/web colours
-on_black = color_sgr("black", background=True)
-on_maroon = color_sgr("maroon", background=True)
-on_green = color_sgr("green", background=True)
-on_olive = color_sgr("olive", background=True)
-on_navy = color_sgr("navy", background=True)
-on_purple = color_sgr("purple", background=True)
-on_teal = color_sgr("teal", background=True)
-on_silver = color_sgr("silver", background=True)
-on_gray = on_grey = color_sgr("gray", background=True)
-on_red = color_sgr("red", background=True)
-on_lime = color_sgr("lime", background=True)
-on_yellow = color_sgr("yellow", background=True)
-on_blue = color_sgr("blue", background=True)
-on_fuchsia = on_magenta = color_sgr("fuchsia", background=True)
-on_aqua = on_cyan = color_sgr("aqua", background=True)
-on_white = color_sgr("white", background=True)
-
-
 def color(value, web_palette_only=False) -> str:
     """ Generate ANSI escape code string for given foreground colour value.
     """
     try:
-        sgr = color_sgr(value, web_palette_only=web_palette_only)
+        sgr = _color_sgr(value, web_palette_only=web_palette_only)
     except ValueError:
         return ""
     else:
@@ -274,7 +182,7 @@ def background_color(value, web_palette_only=False) -> str:
     """ Generate ANSI escape code string for given background colour value.
     """
     try:
-        sgr = color_sgr(value, background=True, web_palette_only=web_palette_only)
+        sgr = _color_sgr(value, background=True, web_palette_only=web_palette_only)
     except ValueError:
         return ""
     else:
@@ -377,7 +285,7 @@ class Text(Sequence):
                 text = text.decode(encoding, errors)
             except AttributeError:
                 pass
-            self._raw: str = str(text).translate(C1_CONTROL_TO_ESCAPE_SEQUENCE)
+            self._raw: str = str(text).translate(C1_CONTROL_TO_ESC_SEQUENCE)
             self._units: [str] = list(_iter_text_units(StringIO(self._raw)))
             self._tab_size: int = tab_size
             self._measurements: [(int, int)] = None
@@ -599,7 +507,7 @@ def _iter_text_units(sio: StringIO) -> Iterable[str]:
                 sio.seek(marker)
                 value = CR
         elif "\x80" <= ch <= "\x9F":
-            value = ch.translate(C1_CONTROL_TO_ESCAPE_SEQUENCE)
+            value = ch.translate(C1_CONTROL_TO_ESC_SEQUENCE)
         else:
             value = ch
         # Check for combining characters

@@ -16,14 +16,15 @@
 # limitations under the License.
 
 
-from pansi.text import color, background_color, on_black, invert, reset
+from pansi.codes import black_bg, invert, reset
+from pansi.text import color, background_color
 
 
 print(f"""\
 {color('#040')}{background_color('#0F0')} !"#$%&'()*+,-./0123456789:;<=>?
 @ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]↑←
 {invert}@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]↑←{~invert}
-{color('#0F0')}{on_black} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█{color('#FF0')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█
+{color('#0F0')}{black_bg} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█{color('#FF0')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█
 {color('#00F')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█{color('#F00')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█
 {color('#FFF')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█{color('#0FF')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█
 {color('#F0F')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█{color('#FF8000')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█{reset}""")

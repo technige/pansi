@@ -52,8 +52,9 @@ GS = "\x1D"     # ^] |    | group separator           | IS₃  | delimiter
 RS = "\x1E"     # ^^ |    | record separator          | IS₂  | delimiter
 US = "\x1F"     # ^_ |    | unit separator            | IS₁  | delimiter
 # ------------- # -- # -- # ------------------------- # ---- # --------------------------------------------------------
-# DEL only
+# SPACE and DELETE
 # ------------- # -- # -- # ------------------------- # ---- # --------------------------------------------------------
+SP = "\x20"               # space
 DEL = "\x7F"              # delete                    |      |
 # ------------- # -- # -- # ------------------------- # ---- # --------------------------------------------------------
 # C1 control codes
@@ -107,10 +108,8 @@ C1_CONTROL_TO_ESC_SEQUENCE = str.maketrans(dict(zip(map(chr, range(0x80, 0xA0)),
 
 
 class SGR:
-    """ The control sequence ``f'{CSI}{params}m'`` is known as 'Select Graphic
-    Rendition' or 'SGR'. This sequence is used to control display attributes
-    such as colour and text style in terminals that support doing so (which
-    most modern terminals do).
+    """ Hold the parameters of an SGR control sequence, along with an
+    optional reset code.
     """
 
     def __init__(self, *parameters, reset=None):

@@ -30,4 +30,3 @@ Colour
 ======
 .. autofunction:: color
 .. autofunction:: background_color
-.. autodata:: CGA_PALETTE

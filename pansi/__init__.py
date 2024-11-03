@@ -16,4 +16,4 @@
 # limitations under the License.
 
 
-__version__ = "2024.10.0"
+__version__ = "2024.11.0"

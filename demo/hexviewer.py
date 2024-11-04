@@ -18,9 +18,8 @@
 
 from argparse import ArgumentParser
 
-from pansi.codes import CSI
+from pansi.codes import CSI, grey
 from pansi.screen import Screen
-from pansi.text import grey
 
 
 class HexViewer:

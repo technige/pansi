@@ -40,9 +40,9 @@ class HexViewer:
     def render(self, line_offset):
         byte_offset = line_offset * self.line_width
         self.screen.clear()
-        n_lines, n_cols = self.screen.size
+        viewport_size = self.screen.viewport_ch
         for line_no, offset in enumerate(range(byte_offset, len(self.data), self.line_width)):
-            if line_no < n_lines - 1:
+            if line_no < viewport_size.y - 1:
                 line = self.data[offset:(offset + 16)]
                 printable_line = "".join(chr(ch) if 32 <= ch <= 126 else f"{grey}·{~grey}" for ch in line)
                 byte_hex = ' '.join(f'{value:02X}' for value in line)
@@ -69,7 +69,7 @@ def main():
             key = screen.read_key()
             if key == f"{CSI}A" and line_offset > 0:
                 line_offset -= 1
-            elif key == f"{CSI}B" and line_offset < viewer.count_data_lines() - screen.size[0] + 1:
+            elif key == f"{CSI}B" and line_offset < viewer.count_data_lines() - screen.viewport_ch.y + 1:
                 line_offset += 1
             elif key == "q":
                 break

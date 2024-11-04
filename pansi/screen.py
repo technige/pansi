@@ -16,12 +16,17 @@
 # limitations under the License.
 
 
+from collections import namedtuple
 from fcntl import ioctl
 from sys import stdin, stdout
 from termios import tcgetattr, tcsetattr, TCSAFLUSH, TIOCGWINSZ
 from tty import setcbreak
 
 from pansi.codes import ESC, CSI
+
+
+px = namedtuple("px", ["x", "y"])
+ch = namedtuple("ch", ["x", "y"])
 
 
 class Screen:
@@ -32,25 +37,15 @@ class Screen:
             return func(screen, *args, **kwargs)
 
     def __init__(self, cout=stdout, cin=stdin, cbreak=True, cursor=False):
-        self.cout = cout
-        self.cin = cin
-        self.cbreak = cbreak
-        self.cursor = cursor
-        self.original_mode = None
-
-    def __enter__(self):
-        if not self.cursor:
-            self.hide_cursor()
-        self.show()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.hide()
-        self.show_cursor()
+        self._cout = cout
+        self._cin = cin
+        self._cbreak = cbreak
+        self._cursor = cursor
+        self._original_mode = None
 
     def _read_ss3(self, seq):
         while True:
-            ch = self.cin.read(1)
+            ch = self._cin.read(1)
             seq += ch
             if 0x40 <= ord(ch) <= 0x7E:
                 break
@@ -58,14 +53,14 @@ class Screen:
 
     def _read_csi(self, seq):
         while True:
-            ch = self.cin.read(1)
+            ch = self._cin.read(1)
             seq += ch
             if 0x40 <= ord(ch) <= 0x7E:
                 break
         return seq
 
     def _read_esc(self, seq):
-        ch = self.cin.read(1)
+        ch = self._cin.read(1)
         seq += ch
         if ch == "[":
             return self._read_csi(seq)
@@ -76,7 +71,7 @@ class Screen:
 
     def read_key(self):
         seq = ""
-        ch = self.cin.read(1)
+        ch = self._cin.read(1)
         seq += ch
         if ch == ESC:
             return self._read_esc(seq)
@@ -93,33 +88,7 @@ class Screen:
             raise OSError(f"Unexpected response {seq!r}")
 
     @property
-    def size_px(self):
-        self.cout.write(f"{CSI}14t")
-        self.cout.flush()
-        args, function = self.read_response()
-        if function == "t":
-            if args[0] == 4:
-                return args[1:]
-            else:
-                raise OSError(f"Unexpected response {function!r} {args[0]!r}")
-        else:
-            raise OSError(f"Unexpected response {function!r}")
-
-    @property
-    def cell_size(self):
-        self.cout.write(f"{CSI}16t")
-        self.cout.flush()
-        args, function = self.read_response()
-        if function == "t":
-            if args[0] == 6:
-                return args[1:]
-            else:
-                raise OSError(f"Unexpected response {function!r} {args[0]!r}")
-        else:
-            raise OSError(f"Unexpected response {function!r}")
-
-    @property
-    def size(self):
+    def viewport_ch(self) -> ch:
         import struct
         import os
         try:
@@ -132,18 +101,43 @@ class Screen:
             os.close(fd)
 
             # Unpack the result
-            rows, cols, _, _ = struct.unpack('HHHH', result)
-
-            return rows, cols
+            lines, cols, _, _ = struct.unpack('HHHH', result)
         except OSError:
             # Fallback method using environment variables
-            return (int(os.environ.get('LINES', 24)),
-                    int(os.environ.get('COLUMNS', 80)))
+            lines = int(os.environ.get('LINES', 24))
+            cols = int(os.environ.get('COLUMNS', 80))
+        return ch(x=cols, y=lines)
+
+    @property
+    def viewport_px(self) -> px:
+        self._cout.write(f"{CSI}14t")
+        self._cout.flush()
+        args, function = self.read_response()
+        if function == "t":
+            if args[0] == 4:
+                return px(x=args[2], y=args[1])
+            else:
+                raise OSError(f"Unexpected response {function!r} {args[0]!r}")
+        else:
+            raise OSError(f"Unexpected response {function!r}")
+
+    @property
+    def cell_px(self) -> px:
+        self._cout.write(f"{CSI}16t")
+        self._cout.flush()
+        args, function = self.read_response()
+        if function == "t":
+            if args[0] == 6:
+                return px(x=args[2], y=args[1])
+            else:
+                raise OSError(f"Unexpected response {function!r} {args[0]!r}")
+        else:
+            raise OSError(f"Unexpected response {function!r}")
 
     @property
     def cur_pos(self):
-        self.cout.write(f"{CSI}6n")
-        self.cout.flush()
+        self._cout.write(f"{CSI}6n")
+        self._cout.flush()
         args, function = self.read_response()
         if function == "R":
             return args
@@ -153,34 +147,37 @@ class Screen:
     @cur_pos.setter
     def cur_pos(self, row_column):
         row, column = row_column
-        self.cout.write(f"{CSI}{row};{column}H")
+        self._cout.write(f"{CSI}{row};{column}H")
 
     def cursor_forward_tab(self, stops=1):
-        self.cout.write(f"{CSI}{stops}I")
+        self._cout.write(f"{CSI}{stops}I")
 
     def clear(self):
-        self.cout.write(f"{CSI}H{CSI}2J")
+        self._cout.write(f"{CSI}H{CSI}2J")
 
     def show(self):
-        self.cout.write(f"{CSI}?1049h")
-        self.cout.flush()
-        self.original_mode = tcgetattr(self.cout)
-        setcbreak(self.cout)
+        if not self._cursor:
+            self.hide_cursor()
+        self._cout.write(f"{CSI}?1049h")
+        self._cout.flush()
+        self._original_mode = tcgetattr(self._cout)
+        setcbreak(self._cout)
         # self.keypad_on()
 
     def hide(self):
         # self.keypad_off()
-        tcsetattr(self.cout, TCSAFLUSH, self.original_mode)
-        self.cout.write(f"{CSI}?1049l")
-        self.cout.flush()
+        tcsetattr(self._cout, TCSAFLUSH, self._original_mode)
+        self._cout.write(f"{CSI}?1049l")
+        self._cout.flush()
+        self.show_cursor()
 
     def show_cursor(self):
-        self.cout.write(f"{CSI}?25h")
-        self.cout.flush()
+        self._cout.write(f"{CSI}?25h")
+        self._cout.flush()
 
     def hide_cursor(self):
-        self.cout.write(f"{CSI}?25l")
-        self.cout.flush()
+        self._cout.write(f"{CSI}?25l")
+        self._cout.flush()
 
     # def keypad_on(self):
     #     self.cout.write(f"{CSI}?1h{ESC}=")
@@ -192,7 +189,7 @@ class Screen:
 
     def write(self, *values):
         for value in values:
-            self.cout.write(str(value))
+            self._cout.write(str(value))
 
     def flush(self):
-        self.cout.flush()
+        self._cout.flush()

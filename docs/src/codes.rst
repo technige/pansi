@@ -8,18 +8,18 @@
 C0 control codes, SPACE and DELETE
 ==================================
 
-====  =============  =========================  ======  =========
-Code  Attribute      ASCII/Unicode Name         Caret   Backslash
-----  -------------  -------------------------  ------  ---------
+====  =============  =========================  ======  =========  =======
+Code  Attribute      ASCII/Unicode Name         Caret   Backslash  Standard
+----  -------------  -------------------------  ------  ---------  -------
 00    .. data:: NUL  NULL                       ``^@``
 01    .. data:: SOH  START OF HEADING           ``^A``
 02    .. data:: STX  START OF TEXT              ``^B``
 03    .. data:: ETX  END OF TEXT                ``^C``
 04    .. data:: EOT  END OF TRANSMISSION        ``^D``
 05    .. data:: ENQ  ENQUIRY                    ``^E``
-06    .. data:: ACK  ACKNOWLEDGE                ``^F``
-07    .. data:: BEL  BELL                       ``^G``  ``\a``
-08    .. data:: BS   BACKSPACE                  ``^H``  ``\b``
+06    .. data:: ACK  ACKNOWLEDGE                ``^F``             ECMA-48 § 8.3.1
+07    .. data:: BEL  BELL                       ``^G``  ``\a``     ECMA-48 § 8.3.3
+08    .. data:: BS   BACKSPACE                  ``^H``  ``\b``     ECMA-48 § 8.3.5
 09    .. data:: HT   HORIZONTAL TABULATION      ``^I``  ``\t``
 0A    .. data:: LF   LINE FEED                  ``^J``  ``\n``
 0B    .. data:: VT   VERTICAL TABULATION        ``^K``  ``\v``
@@ -45,7 +45,7 @@ Code  Attribute      ASCII/Unicode Name         Caret   Backslash
 1F    .. data:: US   UNIT SEPARATOR             ``^_``
 20    .. data:: SP   SPACE
 7F    .. data:: DEL  DELETE                     ``^?``
-====  =============  =========================  ======  =========
+====  =============  =========================  ======  =========  =======
 
 .. seealso::
     - `Unicode C0 Controls and Basic Latin <https://www.unicode.org/charts/PDF/U0000.pdf>`_
@@ -61,12 +61,12 @@ with a 7-bit alternative sequence. These take the form of escape
 sequences, where the second character is in the range U+0040 to U+005F
 inclusive. The module level attributes listed below all resolve to the
 
-====  =============  ========================================  ==========
-Code  Attribute      ASCII/Unicode Name                        Escape
-----  -------------  ----------------------------------------  ----------
+====  =============  ========================================  ==========  =======
+Code  Attribute      ASCII/Unicode Name                        Escape      Standard
+----  -------------  ----------------------------------------  ----------  -------
 80    .. data:: PAD  PADDING CHARACTER                         ``{ESC}@``
 81    .. data:: HOP  HIGH OCTET PRESET                         ``{ESC}A``
-82    .. data:: BPH  BREAK PERMITTED HERE                      ``{ESC}B``
+82    .. data:: BPH  BREAK PERMITTED HERE                      ``{ESC}B``  ECMA-48 § 8.3.4
 83    .. data:: NBH  NO BREAK HERE                             ``{ESC}C``
 84    .. data:: IND  INDEX                                     ``{ESC}D``
 85    .. data:: NEL  NEXT LINE                                 ``{ESC}E``
@@ -80,7 +80,7 @@ Code  Attribute      ASCII/Unicode Name                        Escape
 8D    .. data:: RI   REVERSE INDEX                             ``{ESC}M``
 8E    .. data:: SS2  SINGLE SHIFT TWO                          ``{ESC}N``
 8F    .. data:: SS3  SINGLE SHIFT THREE                        ``{ESC}O``
-90    .. data:: DCS  DEVICE CONTROL STRING                     ``{ESC}P``
+90    .. data:: DCS  DEVICE CONTROL STRING                     ``{ESC}P``  ECMA-48 § 8.3.27
 91    .. data:: PU1  PRIVATE USE ONE                           ``{ESC}Q``
 92    .. data:: PU2  PRIVATE USE TWO                           ``{ESC}R``
 93    .. data:: STS  SET TRANSMIT STATE                        ``{ESC}S``
@@ -88,15 +88,15 @@ Code  Attribute      ASCII/Unicode Name                        Escape
 95    .. data:: MW   MESSAGE WAITING                           ``{ESC}U``
 96    .. data:: SPA  START OF PROTECTED AREA                   ``{ESC}V``
 97    .. data:: EPA  END OF PROTECTED AREA                     ``{ESC}W``
-98    .. data:: SOS  START OF STRING                           ``{ESC}X``
+98    .. data:: SOS  START OF STRING                           ``{ESC}X``  ECMA-48 § 8.3.128
 99    .. data:: SGC  SINGLE GRAPHIC CHARACTER INTRODUCER       ``{ESC}Y``
 9A    .. data:: SCI  SINGLE CHARACTER INTRODUCER               ``{ESC}Z``
 9B    .. data:: CSI  CONTROL SEQUENCE INTRODUCER               ``{ESC}[``
 9C    .. data:: ST   STRING TERMINATOR                         ``{ESC}\``
-9D    .. data:: OSC  OPERATING SYSTEM COMMAND                  ``{ESC}]``
-9E    .. data:: PM   PRIVACY MESSAGE                           ``{ESC}^``
-9F    .. data:: APC  APPLICATION PROGRAM COMMAND               ``{ESC}_``
-====  =============  ========================================  ==========
+9D    .. data:: OSC  OPERATING SYSTEM COMMAND                  ``{ESC}]``  ECMA-48 § 8.3.89
+9E    .. data:: PM   PRIVACY MESSAGE                           ``{ESC}^``  ECMA-48 § 8.3.94
+9F    .. data:: APC  APPLICATION PROGRAM COMMAND               ``{ESC}_``  ECMA-48 § 8.3.2
+====  =============  ========================================  ==========  =======
 
 .. data:: C1_CONTROL_TO_ESC_SEQUENCE
 

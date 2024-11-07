@@ -33,7 +33,7 @@ html_theme = 'python_docs_theme'
 html_static_path = ['_static']
 html_theme_options = {
     "sidebarwidth": "330px",
-    "body_max_width": "96ch",
+    "body_max_width": "100ch",
 }
 html_css_files = [
     'vanilla.css',

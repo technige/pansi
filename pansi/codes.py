@@ -16,6 +16,9 @@
 # limitations under the License.
 
 
+from sys import stdin
+
+
 # ------------- # -- # -- # ------------------------- # ---- # --------------------------------------------------------
 # C0 control codes
 # ------------- # -- # -- # ------------------------- # ---- # --------------------------------------------------------
@@ -210,3 +213,56 @@ C1_NEL = "\x85"
 LS = "\u2028"
 PS = "\u2029"
 UNICODE_NEWLINES = {CR, LF, CRLF, NEL, C1_NEL, VT, FF, LS, PS}
+
+
+def read(cin=stdin) -> str:
+    r""" Read and return the next character or character sequence from the
+    given character input stream. Character sequences are introduced by an
+    ESC character, and follow one of several sets of rules depending on the
+    character that immediately follows.
+
+    The character input stream may be any object with a ``read(n)`` method.
+
+    .. seealso:: ECMA-35, ECMA-48
+    """
+    ch = cin.read(1)
+    if ch == ESC:
+        # Escape sequence
+        ch = cin.read(1)
+        seq = [ESC, ch]
+        if ch == '[' or ch == 'O':
+            # CSI ('{ESC}[') or SS3 ('{ESC}O')
+            while True:
+                ch = cin.read(1)
+                seq.append(ch)
+                if '@' <= ch <= '~':
+                    break
+        elif ch in {'P', 'X', ']', '^', '_'}:
+            # Sequences terminated by ST
+            # APC = f"{ESC}_"   # ECMA-48 § 8.3.2
+            # DCS = f"{ESC}P"   # ECMA-48 § 8.3.27
+            # OSC = f"{ESC}]"   # ECMA-48 § 8.3.89
+            # PM = f"{ESC}^"   # ECMA-48 § 8.3.94
+            # SOS = f"{ESC}X"   # ECMA-48 § 8.3.128
+            while True:
+                ch = cin.read(1)
+                seq.append(ch)
+                if seq[-2:] == [ESC, '\\']:
+                    break
+        elif '@' <= ch <= '_':
+            pass  # TODO: other type Fe
+        elif '`' <= ch <= '~':
+            pass  # TODO: type Fs
+        elif '0' <= ch <= '?':
+            pass  # TODO: type Fp
+        elif ' ' <= ch <= '/':
+            pass  # TODO: type nF
+            while True:
+                ch = cin.read(1)
+                seq.append(ch)
+                if '0' <= ch <= '~':
+                    break
+        value = ''.join(seq)
+    else:
+        value = ch
+    return value

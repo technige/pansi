@@ -16,7 +16,7 @@
 # limitations under the License.
 
 
-from io import StringIO, TextIOBase, SEEK_SET
+from io import StringIO, TextIOBase
 from sys import stdin
 from unicodedata import category, east_asian_width
 
@@ -342,7 +342,14 @@ class TerminalInput(TextIOBase):
         return "".join(buffer)
 
     def read(self, size=-1):
-        return self._read(size=size)
+        if size is None or size < 0:
+            self._check_closed()
+            self._check_readable()
+            buffer = "".join(self._buffer)
+            self._buffer.clear()
+            return buffer + self._channel.read()
+        else:
+            return self._read(size=size)
 
     def readable(self):
         return self._channel.readable()
@@ -372,7 +379,7 @@ def measure_text(text, tab_size: int = 8) -> [int]:
     [5, 5]
     """
     tin = TerminalInput(text)
-    widths = []
+    line_widths = []
     cursor = 0
     while True:
         char_seq = tin.read(1)
@@ -396,8 +403,7 @@ def measure_text(text, tab_size: int = 8) -> [int]:
             # - NEL (both 7-bit and 8-bit representations)
             # - VT, FF
             # - LS, PS
-            widths.append(cursor)
-            # width = -cursor
+            line_widths.append(cursor)
             cursor = 0
         elif first_char == BS:
             if cursor > 0:
@@ -430,5 +436,5 @@ def measure_text(text, tab_size: int = 8) -> [int]:
                 cursor += (2 if east_asian_width(first_char) in {'F', 'W'} else 1)
             else:
                 pass  # not printable, so no visible size
-    widths.append(cursor)
-    return widths
+    line_widths.append(cursor)
+    return line_widths

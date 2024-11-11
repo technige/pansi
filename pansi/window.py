@@ -23,8 +23,7 @@ from sys import stdin, stdout
 from termios import tcgetattr, tcsetattr, TCSAFLUSH, TIOCGWINSZ
 from tty import setcbreak
 
-from pansi.codes import CSI, read, ST, DCS, ESC, OSC
-
+from pansi.codes import CSI, ST, DCS, ESC, OSC, TerminalInput
 
 xy = namedtuple("xy", ["x", "y"])
 
@@ -123,9 +122,9 @@ class Window:
         with Window() as window:
             return func(window, *args, **kwargs)
 
-    def __init__(self, cout=stdout, cin=stdin, cbreak=True, cursor=False):
+    def __init__(self, cin=stdin, cout=stdout, cbreak=True, cursor=False):
+        self._input = TerminalInput(cin)
         self._cout = cout
-        self._cin = cin
         self._cbreak = cbreak
         self._cursor = cursor
         self._original_mode = None
@@ -242,7 +241,7 @@ class Window:
         self._cout.flush()
 
     def _read_next(self):
-        c = read(self._cin)
+        c = self._input.read(1)
         if c.startswith(CSI) and c[-1] in "cRt":
             event_type = "XTWINOPS"
             event = InputEvent(c)

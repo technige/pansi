@@ -16,7 +16,9 @@
 # limitations under the License.
 
 
+from io import StringIO, TextIOBase, SEEK_SET
 from sys import stdin
+from unicodedata import category, east_asian_width
 
 
 # ------------- # -- # -- # ------------------------- # ---- # --------------------------------------------------------
@@ -215,54 +217,218 @@ PS = "\u2029"
 UNICODE_NEWLINES = {CR, LF, CRLF, NEL, C1_NEL, VT, FF, LS, PS}
 
 
-def read(cin=stdin) -> str:
-    r""" Read and return the next character or character sequence from the
-    given character input stream. Character sequences are introduced by an
-    ESC character, and follow one of several sets of rules depending on the
-    character that immediately follows.
+class TerminalInput(TextIOBase):
 
-    The character input stream may be any object with a ``read(n)`` method.
+    def __init__(self, channel=stdin):
+        super().__init__()
+        channel = channel or stdin
+        if hasattr(channel, "read"):
+            self._channel = channel
+        else:
+            self._channel = StringIO(str(channel))
+        self._buffer = []  # list of chars
+        self._closed = False
 
-    .. seealso:: ECMA-35, ECMA-48
+    def __del__(self):
+        super().__del__()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        raise NotImplementedError
+
+    def _check_closed(self):
+        if self._closed:
+            raise ValueError("Terminal input is closed")
+
+    def _check_readable(self):
+        if not self.readable():
+            raise OSError("Terminal input is not readable")
+
+    def _peek_char(self):
+        if self._buffer:
+            return self._buffer[0]
+        ch = self._channel.read(1)
+        if ch:
+            self._buffer.append(ch)
+        return ch
+
+    def _read_char(self):
+        if self._buffer:
+            return self._buffer.pop(0)
+        else:
+            return self._channel.read(1)
+
+    def close(self):
+        self._closed = True
+
+    @property
+    def closed(self):
+        return self._closed
+
+    def fileno(self):
+        self._check_closed()
+        return self._channel.fileno()
+
+    def isatty(self):
+        self._check_closed()
+        return self._channel.isatty()
+
+    def _read(self, size=-1, break_on_newline=False):
+        self._check_closed()
+        self._check_readable()
+        buffer = []
+        count = 0
+        while size is None or size < 0 or count < size:
+            count += 1
+            ch = self._read_char()
+            if not ch:
+                break
+            elif ch == CR:
+                buffer.append(ch)
+                if self._peek_char() == LF:
+                    ch = self._read_char()
+                    buffer.append(ch)
+                if break_on_newline:
+                    break
+            elif ch in UNICODE_NEWLINES:
+                buffer.append(ch)
+                if break_on_newline:
+                    break
+            elif ch == ESC:
+                # Escape sequence
+                ch = self._read_char()
+                seq = [ESC, ch]
+                if ch == '[' or ch == 'O':
+                    # CSI ('{ESC}[') or SS3 ('{ESC}O')
+                    while True:
+                        ch = self._read_char()
+                        seq.append(ch)
+                        if '@' <= ch <= '~':
+                            break
+                elif ch == "E":
+                    buffer.extend(seq)
+                    if break_on_newline:
+                        break
+                elif ch in {'P', 'X', ']', '^', '_'}:
+                    # Sequences terminated by ST
+                    # APC = f"{ESC}_"   # ECMA-48 § 8.3.2
+                    # DCS = f"{ESC}P"   # ECMA-48 § 8.3.27
+                    # OSC = f"{ESC}]"   # ECMA-48 § 8.3.89
+                    # PM = f"{ESC}^"   # ECMA-48 § 8.3.94
+                    # SOS = f"{ESC}X"   # ECMA-48 § 8.3.128
+                    while True:
+                        ch = self._read_char()
+                        seq.append(ch)
+                        if seq[-2:] == [ESC, '\\']:
+                            break
+                elif '@' <= ch <= '_':
+                    pass  # TODO: other type Fe
+                elif '`' <= ch <= '~':
+                    pass  # TODO: type Fs
+                elif '0' <= ch <= '?':
+                    pass  # TODO: type Fp
+                elif ' ' <= ch <= '/':
+                    pass  # TODO: type nF
+                    while True:
+                        ch = self._read_char()
+                        seq.append(ch)
+                        if '0' <= ch <= '~':
+                            break
+                buffer.extend(seq)
+            else:
+                buffer.append(ch)
+        return "".join(buffer)
+
+    def read(self, size=-1):
+        return self._read(size=size)
+
+    def readable(self):
+        return self._channel.readable()
+
+    def readline(self, size=-1, /):
+        return self._read(size=size, break_on_newline=True)
+
+
+def measure_text(text, tab_size: int = 8) -> [int]:
+    r""" Measure the forward advance of one or more lines of text, returning
+    an array of sizes, one per line.
+
+    Notes:
+    - Regular characters occupy one cell
+    - Non-printable characters and escape sequences occupy zero cells
+    - Full width characters occupy two cells
+
+    >>> measure_text("hello, world")
+    [12]
+    >>> measure_text(f"hello, {green}world{reset}")
+    [12]
+    >>> measure_text("hello, ｗｏｒｌｄ")
+    [17]
+    >>> measure_text(f"hello, {green}ｗｏｒｌｄ{reset}")
+    [17]
+    >>> measure_text("hello\nworld")
+    [5, 5]
     """
-    ch = cin.read(1)
-    if ch == ESC:
-        # Escape sequence
-        ch = cin.read(1)
-        seq = [ESC, ch]
-        if ch == '[' or ch == 'O':
-            # CSI ('{ESC}[') or SS3 ('{ESC}O')
-            while True:
-                ch = cin.read(1)
-                seq.append(ch)
-                if '@' <= ch <= '~':
-                    break
-        elif ch in {'P', 'X', ']', '^', '_'}:
-            # Sequences terminated by ST
-            # APC = f"{ESC}_"   # ECMA-48 § 8.3.2
-            # DCS = f"{ESC}P"   # ECMA-48 § 8.3.27
-            # OSC = f"{ESC}]"   # ECMA-48 § 8.3.89
-            # PM = f"{ESC}^"   # ECMA-48 § 8.3.94
-            # SOS = f"{ESC}X"   # ECMA-48 § 8.3.128
-            while True:
-                ch = cin.read(1)
-                seq.append(ch)
-                if seq[-2:] == [ESC, '\\']:
-                    break
-        elif '@' <= ch <= '_':
-            pass  # TODO: other type Fe
-        elif '`' <= ch <= '~':
-            pass  # TODO: type Fs
-        elif '0' <= ch <= '?':
-            pass  # TODO: type Fp
-        elif ' ' <= ch <= '/':
-            pass  # TODO: type nF
-            while True:
-                ch = cin.read(1)
-                seq.append(ch)
-                if '0' <= ch <= '~':
-                    break
-        value = ''.join(seq)
-    else:
-        value = ch
-    return value
+    tin = TerminalInput(text)
+    widths = []
+    cursor = 0
+    while True:
+        char_seq = tin.read(1)
+        if not char_seq:
+            break
+        # Measurement can generally be taken by looking at only the
+        # first character in a sequence. But C1 control codes might
+        # be represented in expanded ESC+X form, so we should
+        # normalise those.
+        first_char = char_seq[0]
+        if first_char == ESC and len(char_seq) > 1:
+            second_char = char_seq[1]
+            if "@" <= second_char <= "_":
+                # collapse 7-bit C1 control codes to 8-bit equivalents
+                first_char = chr(0x40 + ord(second_char))
+        # Now, check specific edge cases and fall back to checking the
+        # Unicode general category.
+        if first_char in UNICODE_NEWLINES:
+            # This detects:
+            # - CR, LF, CRLF (CRLF will be tested as CR, but whatever)
+            # - NEL (both 7-bit and 8-bit representations)
+            # - VT, FF
+            # - LS, PS
+            widths.append(cursor)
+            # width = -cursor
+            cursor = 0
+        elif first_char == BS:
+            if cursor > 0:
+                cursor -= 1
+            # width = -1
+        elif first_char == HT:
+            # Advance to next multiple of tab_size. This formula should
+            # only ever return values between 1 and tab_size inclusive.
+            advance = tab_size - (cursor % tab_size)
+            cursor += advance
+        elif first_char < " ":
+            # Other control characters do not affect the cursor:
+            # - NUL, BEL, CAN, EM, SUB, ESC
+            # - TC (SOH, STX, ETX, EOT, ENQ, ACK, DLE, NAK, SYN, ETB)
+            # - LS (SI, SO)
+            # - DC (DC1, DC2, DC3, DC4)
+            # - IS (FS, GS, RS, US)
+            pass  # no advance
+        elif first_char <= "~":
+            # Anything else in ASCII range is printable and one cell wide.
+            cursor += 1
+        elif DEL <= first_char <= APC:
+            # TODO: this isn't true for all of these
+            pass  # no advance
+        else:
+            # For everything else, check the Unicode general category.
+            major, minor = category(first_char)
+            is_printable = major in {'L', 'N', 'P', 'S'} or (major, minor) == ('Z', 's')
+            if is_printable:
+                cursor += (2 if east_asian_width(first_char) in {'F', 'W'} else 1)
+            else:
+                pass  # not printable, so no visible size
+    widths.append(cursor)
+    return widths

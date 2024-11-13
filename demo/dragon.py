@@ -16,7 +16,7 @@
 # limitations under the License.
 
 
-from pansi.codes import black_bg, invert, reset
+from pansi import black_bg, invert, reset
 from pansi.text import color, background_color
 
 

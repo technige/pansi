@@ -26,24 +26,17 @@ and styles using ANSI escape sequences.
 
 from collections.abc import Sequence
 from io import StringIO
-from re import compile as re_compile
 from typing import Iterable
 from unicodedata import category, east_asian_width
 
 
-from pansi.codes import (
+from pansi import (
     BS, HT, CR, LF, CRLF, UNICODE_NEWLINES,
     ESC, CSI, C1_CONTROL_TO_ESC_SEQUENCE,
     DEL, APC, SGR, reset, bold, light, italic,
     underline, double_underline, overline, line_through, blink,
 )
 from pansi.color import WEB_PALETTE, decode_hex_color, rgb
-
-
-# Patterns
-_PADDED_SEGMENT_BREAK = re_compile(r"[ \t]*(\r\n|\n|\r)[ \t]*")
-_TWO_OR_MORE_SPACES = re_compile(r"  +")
-_COLOR_FUNCTION = re_compile(r"(\w+)\((.*?)(/(.*?))?\)")
 
 
 # Translation tables

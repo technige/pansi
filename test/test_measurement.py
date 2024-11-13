@@ -6,7 +6,7 @@ from pansi.text import Text
 class ControlCharactersMeasurementTest(TestCase):
 
     def test_newlines_at_end(self):
-        from pansi.codes import UNICODE_NEWLINES
+        from pansi import UNICODE_NEWLINES
         for newline in UNICODE_NEWLINES:
             with self.subTest(newline=newline):
                 text = Text(f"abcdefg{newline}")
@@ -39,7 +39,7 @@ class ControlCharactersMeasurementTest(TestCase):
         self.assertEqual(actual, expected)
 
     def test_c0_controls(self):
-        from pansi.codes import \
+        from pansi import \
             NUL, BEL, CAN, EM, SUB, ESC, \
             SOH, STX, ETX, EOT, ENQ, ACK, DLE, NAK, SYN, ETB, \
             SI, SO, \
@@ -59,14 +59,14 @@ class ControlCharactersMeasurementTest(TestCase):
                 self.assertEqual(width, 0)
 
     def test_backspace(self):
-        from pansi.codes import BS
+        from pansi import BS
         text = Text(BS)
         (line_advance, width), _ = next(measure(text))
         self.assertEqual(line_advance, 0)
         self.assertEqual(width, -1)
 
     def test_del(self):
-        from pansi.codes import DEL
+        from pansi import DEL
         text = DEL
         (line_advance, width), _ = next(measure(text))
         self.assertEqual(line_advance, 0)

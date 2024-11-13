@@ -18,70 +18,78 @@
 
 from argparse import ArgumentParser
 
-from pansi.codes import CSI, grey, SS3
-from pansi.window import Window
+from pansi import CSI, grey
+from pansi.terminal import Terminal
 
 
 class HexViewer:
 
     line_width = 16
 
-    def __init__(self, screen, data):
-        self.screen = screen
-        self.data = data
+    @classmethod
+    def load(cls, filename):
+        with open(filename, "rb") as f:
+            return cls(f.read())
 
-    def count_data_lines(self):
+    def __init__(self, data):
+        self.terminal = Terminal()
+        self.terminal.add_event_listener("keypress", self.on_keypress)
+        self.terminal.add_event_listener("resize", self.on_resize)
+        self.data = data
+        self.data_lines = self._count_data_lines()
+        self.line_offset = 0
+
+    def _count_data_lines(self):
         count = len(self.data) / self.line_width
         if count == int(count):
             return int(count)
         else:
             return int(count + 1)
 
-    def render(self, line_offset):
-        byte_offset = line_offset * self.line_width
-        # self.screen.clear()
-        viewport_size = self.screen.size["ch"]
+    def on_keypress(self, data):
+        if data == f"{CSI}A" and self.line_offset > 0:
+            self.line_offset -= 1
+            self.render()
+        elif data == f"{CSI}B" and self.line_offset < self.data_lines - self.terminal.get_size().lines + 1:
+            self.line_offset += 1
+            self.render()
+
+    def on_resize(self, data):
+        self.render()
+
+    def run(self):
+        self.terminal.hide_cursor()
+        self.terminal.show_alternate_screen()
+        try:
+            self.terminal.set_cursor_position(0, 0)
+            self.render()
+            self.terminal.loop()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            self.terminal.hide_alternate_screen()
+            self.terminal.show_cursor()
+
+    def render(self):
+        byte_offset = self.line_offset * self.line_width
+        self.terminal.clear()
+        terminal_size = self.terminal.get_size()
         for line_no, offset in enumerate(range(byte_offset, len(self.data), self.line_width)):
-            if line_no < viewport_size.y - 1:
+            if line_no < terminal_size.lines - 1:
                 line = self.data[offset:(offset + 16)]
                 printable_line = "".join(chr(ch) if 32 <= ch <= 126 else f"{grey}·{~grey}" for ch in line)
                 byte_hex = ' '.join(f'{value:02X}' for value in line)
                 print(f"{offset:08X}  {byte_hex:<47}  {printable_line}")
             else:
                 break
-        self.screen.flush()
+        self.terminal.flush()
 
 
 def main():
     parser = ArgumentParser()
     parser.add_argument("filename")
     args = parser.parse_args()
-    window = Window()
-    try:
-        window.hide_cursor()
-        window.show()
-        with open(args.filename, "rb") as f:
-            data = f.read()
-        viewer = HexViewer(window, data)
-        line_offset = 0
-
-        def on_key_press(input_event):
-            nonlocal line_offset
-            if input_event.data == f"{CSI}A" and line_offset > 0:
-                line_offset -= 1
-                viewer.render(line_offset)
-            elif input_event.data == f"{CSI}B" and line_offset < viewer.count_data_lines() - window.size["ch"].y + 1:
-                line_offset += 1
-                viewer.render(line_offset)
-
-        viewer.render(line_offset)
-        window.add_event_listener("keypress", on_key_press)
-        window.loop()
-    except KeyboardInterrupt:
-        pass  # Ctrl+C to exit
-    finally:
-        window.hide()
-        window.show_cursor()
+    HexViewer.load(args.filename).run()
 
 
 if __name__ == "__main__":

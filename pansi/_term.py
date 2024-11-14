@@ -47,9 +47,59 @@ class KeyboardEvent(Event):
     def __init__(self, event_type, key):
         super().__init__(event_type)
         self.key = key
+        self.name = ""
+        self.shift_key = False
+        self.alt_key = False
+        self.ctrl_key = False
+        self.meta_key = False
+        self._resolve()
 
     def __repr__(self):
-        return f"{type(self).__name__}(event_type={self.type!r}, key={self.key!r})"
+
+        parts = [
+            f"{type(self).__name__}",
+            f"type={self.type!r}",
+            f"key={self.key!r}",
+        ]
+        if self.name:
+            parts.append(f"name={self.name!r}")
+        if self.shift_key:
+            parts.append(f"shift_key={self.shift_key!r}")
+        if self.alt_key:
+            parts.append(f"alt_key={self.alt_key!r}")
+        if self.ctrl_key:
+            parts.append(f"ctrl_key={self.ctrl_key!r}")
+        if self.meta_key:
+            parts.append(f"meta_key={self.meta_key!r}")
+        return f"<{' '.join(parts)}>"
+
+    def _resolve(self):
+        # TODO: move this to _codes
+        if self.key.startswith(CSI):
+            function = self.key[-1]
+            if function == "A":
+                count, _, modifiers = self.key[2:-1].partition(";")
+                self.name = "CUU"
+                self._resolve_modifiers(modifiers)
+            elif function == "B":
+                count, _, modifiers = self.key[2:-1].partition(";")
+                self.name = "CUD"
+                self._resolve_modifiers(modifiers)
+            elif function == "C":
+                count, _, modifiers = self.key[2:-1].partition(";")
+                self.name = "CUF"
+                self._resolve_modifiers(modifiers)
+            elif function == "D":
+                count, _, modifiers = self.key[2:-1].partition(";")
+                self.name = "CUB"
+                self._resolve_modifiers(modifiers)
+
+    def _resolve_modifiers(self, modifiers):
+        # https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-PC-Style-Function-Keys
+        self.shift_key = modifiers in {"2", "4", "6", "8", "10", "12", "14", "16"}
+        self.alt_key = modifiers in {"3", "4", "7", "8", "11", "12", "15", "16"}
+        self.ctrl_key = modifiers in {"5", "6", "7", "8", "13", "14", "15", "16"}
+        self.meta_key = modifiers in {"9", "10", "11", "12", "13", "14", "15", "16"}
 
 
 class TerminalInput(TextIOBase):

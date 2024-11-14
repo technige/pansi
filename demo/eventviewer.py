@@ -27,12 +27,10 @@ class Demo:
         self.terminal.add_event_listener("resize", self.on_resize)
 
     def on_keypress(self, event):
-        self.terminal.write(f"Input event (event = {event!r})\n")
-        self.terminal.flush()
+        self.terminal.print(f"Input event (event = {event!r})")
 
     def on_resize(self, event):
-        self.terminal.write(f"Resize event (event = {event!r})\n")
-        self.terminal.flush()
+        self.terminal.print(f"Resize event (event = {event!r})")
 
     def run(self):
         self.terminal.hide_cursor()

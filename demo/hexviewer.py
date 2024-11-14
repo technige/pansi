@@ -18,8 +18,7 @@
 
 from argparse import ArgumentParser
 
-from pansi import CSI, grey
-from pansi.terminal import Terminal
+from pansi import CSI, grey, Terminal
 
 
 class HexViewer:

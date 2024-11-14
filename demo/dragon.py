@@ -16,7 +16,7 @@
 # limitations under the License.
 
 
-from pansi.terminal import Terminal
+from pansi import Terminal
 
 
 term = Terminal()

@@ -18,7 +18,7 @@
 
 from io import StringIO, TextIOBase
 from select import select
-from sys import stdin
+from sys import stdin, stdout
 from unicodedata import category, east_asian_width
 
 
@@ -215,33 +215,163 @@ white_bg = SGR(107, reset=49)
 #
 # https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-5/#G10213
 CRLF = f"{CR}{LF}"
-C1_NEL = "\x85"
-LS = "\u2028"
-PS = "\u2029"
-UNICODE_NEWLINES = {CR, LF, CRLF, NEL, C1_NEL, VT, FF, LS, PS}
+UNICODE_NEWLINES = {CR, LF, CRLF, NEL, "\x85", VT, FF, "\u2028", "\u2029"}
+
+
+# Translation tables
+TO_SUBSCRIPT = str.maketrans(dict(zip("()+-0123456789=aehklmnopst",
+                                      "₍₎₊₋₀₁₂₃₄₅₆₇₈₉₌ₐₑₕₖₗₘₙₒₚₛₜ")))
+TO_SUPERSCRIPT = str.maketrans(dict(zip("()+-0123456789=in",
+                                        "⁽⁾⁺⁻⁰¹²³⁴⁵⁶⁷⁸⁹⁼ⁱⁿ")))
+
+
+#: Dictionary mapping the original set of named web colors to a pair of ANSI
+#: terminal colour codes corresponding to foreground and background selectors.
+#:
+#: The original sixteen web colours were derived from CGA, an IBM graphics
+#: card that established a standard for colour palettes used in computer
+#: displays. Within those sixteen colours were eight low intensity colours
+#: and eight high intensity colours. These in turn map to the sixteen base
+#: colours still used in terminal emulators today.
+#:
+#: In practice, terminal emulation software renders a range of different
+#: shades for these colours, although the selector codes remain the same.
+#:
+#: +-----------+------------------------+------------------+----------+
+#: | Selector  |                        |                  |          |
+#: +-----+-----+                        |                  |          |
+#: |  FG |  BG | Description            | Web color names  |    CGA   |
+#: +=====+=====+========================+==================+==========+
+#: |  30 |  40 | low intensity black    | black            | ``#000`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  31 |  41 | low intensity red      | maroon           | ``#A00`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  32 |  42 | low intensity green    | green            | ``#0A0`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  33 |  43 | low intensity yellow   | olive            | ``#A50`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  34 |  44 | low intensity blue     | navy             | ``#00A`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  35 |  45 | low intensity magenta  | purple           | ``#A0A`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  36 |  46 | low intensity cyan     | teal             | ``#0AA`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  37 |  47 | low intensity white    | silver           | ``#AAA`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  90 | 100 | high intensity black   | grey, gray       | ``#555`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  91 | 101 | high intensity red     | red              | ``#F55`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  92 | 102 | high intensity green   | lime             | ``#5F5`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  93 | 103 | high intensity yellow  | yellow           | ``#FF5`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  94 | 104 | high intensity blue    | blue             | ``#55F`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  95 | 105 | high intensity magenta | fuchsia, magenta | ``#F5F`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  96 | 106 | high intensity cyan    | aqua, cyan       | ``#5FF`` |
+#: +-----+-----+------------------------+------------------+----------+
+#: |  97 | 107 | high intensity white   | white            | ``#FFF`` |
+#: +-----+-----+------------------------+------------------+----------+
+#:
+#: - https://en.wikipedia.org/wiki/Color_Graphics_Adapter#Color_palette
+#: - https://int10h.org/blog/2022/06/ibm-5153-color-true-cga-palette/
+#: - https://www.w3.org/TR/REC-html40/types.html#h-6.5
+#:
+CGA_PALETTE = {
+    "aqua": (96, 106),      # alias for "cyan"
+    "black": (30, 40),
+    "blue": (94, 104),
+    "cyan": (96, 106),      # alias for "aqua"
+    "fuchsia": (95, 105),   # alias for "magenta"
+    "gray": (90, 100),      # alias for "grey"
+    "green": (32, 42),
+    "grey": (90, 100),      # alias for "gray"
+    "lime": (92, 102),
+    "magenta": (95, 105),   # alias for "fuchsia"
+    "maroon": (31, 41),
+    "navy": (34, 44),
+    "olive": (33, 43),
+    "purple": (35, 45),
+    "red": (91, 101),
+    "silver": (37, 47),
+    "teal": (36, 46),
+    "white": (97, 107),
+    "yellow": (93, 103),
+}
 
 
 class TerminalInput(TextIOBase):
 
-    def __init__(self, channel=stdin):
+    def __init__(self, stream=stdin):
         super().__init__()
-        channel = channel or stdin
-        if not hasattr(channel, "read") or not callable(channel.read):
-            raise ValueError(f"Channel {channel!r} has no read method")
-        if not hasattr(channel, "readable") or not callable(channel.readable) or not channel.readable():
-            raise ValueError(f"Channel {channel!r} is not readable")
-        self._channel = channel
+        stream = stream or stdin
+        if not hasattr(stream, "read") or not callable(stream.read):
+            raise ValueError(f"Stream {stream!r} has no read method")
+        if not hasattr(stream, "readable") or not callable(stream.readable) or not stream.readable():
+            raise ValueError(f"Stream {stream!r} is not readable")
+        self._stream = stream
         self._buffer = []  # list of chars
         self._closed = False
 
-    def __del__(self):
-        super().__del__()
-
-    def __enter__(self):
+    def __iter__(self):
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        raise NotImplementedError
+    def __next__(self):
+        """ Read and return the next character unit.
+        """
+        ch = self._read_char()
+        if not ch:
+            raise StopIteration
+        elif ch == CR:
+            seq = [ch]
+            if self._peek_char() == LF:
+                ch = self._read_char()
+                seq.append(ch)
+            return "".join(seq)
+        elif ch == ESC:
+            # Escape sequence
+            ch = self._read_char()
+            seq = [ESC, ch]
+            if ch == '[' or ch == 'O':
+                # CSI ('{ESC}[') or SS3 ('{ESC}O')
+                while True:
+                    ch = self._read_char()
+                    seq.append(ch)
+                    if '@' <= ch <= '~':
+                        break
+            elif ch in {'P', 'X', ']', '^', '_'}:
+                # Sequences terminated by ST
+                # APC = f"{ESC}_"   # ECMA-48 § 8.3.2
+                # DCS = f"{ESC}P"   # ECMA-48 § 8.3.27
+                # OSC = f"{ESC}]"   # ECMA-48 § 8.3.89
+                # PM  = f"{ESC}^"   # ECMA-48 § 8.3.94
+                # SOS = f"{ESC}X"   # ECMA-48 § 8.3.128
+                while True:
+                    ch = self._read_char()
+                    seq.append(ch)
+                    if seq[-2:] == [ESC, '\\']:
+                        break
+            elif '@' <= ch <= '_':
+                pass  # TODO: other type Fe
+            elif '`' <= ch <= '~':
+                pass  # TODO: type Fs
+            elif '0' <= ch <= '?':
+                pass  # TODO: type Fp
+            elif ' ' <= ch <= '/':
+                pass  # TODO: type nF
+                while True:
+                    ch = self._read_char()
+                    seq.append(ch)
+                    if '0' <= ch <= '~':
+                        break
+            return "".join(seq)
+        else:
+            return ch
+
+    def __del__(self):
+        super().__del__()
 
     def _check_closed(self):
         if self._closed:
@@ -258,7 +388,7 @@ class TerminalInput(TextIOBase):
     def _peek_char(self):
         if self._buffer:
             return self._buffer[0]
-        ch = self._channel.read(1)
+        ch = self._stream.read(1)
         if ch:
             self._buffer.append(ch)
         return ch
@@ -267,7 +397,7 @@ class TerminalInput(TextIOBase):
         if self._buffer:
             return self._buffer.pop(0)
         else:
-            return self._channel.read(1)
+            return self._stream.read(1)
 
     def close(self):
         self._closed = True
@@ -278,86 +408,37 @@ class TerminalInput(TextIOBase):
 
     def fileno(self):
         self._check_closed()
-        return self._channel.fileno()
+        return self._stream.fileno()
 
     def isatty(self):
         self._check_closed()
         try:
-            return self._channel.isatty()
+            return self._stream.isatty()
         except (AttributeError, TypeError):
             return False
 
-    def _read(self, size=-1, break_on_newline=False):
+    def _read_units(self, size=-1, break_on_newline=False) -> [str]:
         self._check_closed()
         self._check_readable()
         buffer = []
         count = 0
         while size is None or size < 0 or count < size:
             count += 1
-            ch = self._read_char()
-            if not ch:
+            try:
+                char_unit = next(self)
+            except StopIteration:
                 break
-            elif ch == CR:
-                buffer.append(ch)
-                if self._peek_char() == LF:
-                    ch = self._read_char()
-                    buffer.append(ch)
-                if break_on_newline:
-                    break
-            elif ch in UNICODE_NEWLINES:
-                buffer.append(ch)
-                if break_on_newline:
-                    break
-            elif ch == ESC:
-                # Escape sequence
-                ch = self._read_char()
-                seq = [ESC, ch]
-                if ch == '[' or ch == 'O':
-                    # CSI ('{ESC}[') or SS3 ('{ESC}O')
-                    while True:
-                        ch = self._read_char()
-                        seq.append(ch)
-                        if '@' <= ch <= '~':
-                            break
-                elif ch == "E":
-                    buffer.extend(seq)
-                    if break_on_newline:
-                        break
-                elif ch in {'P', 'X', ']', '^', '_'}:
-                    # Sequences terminated by ST
-                    # APC = f"{ESC}_"   # ECMA-48 § 8.3.2
-                    # DCS = f"{ESC}P"   # ECMA-48 § 8.3.27
-                    # OSC = f"{ESC}]"   # ECMA-48 § 8.3.89
-                    # PM = f"{ESC}^"   # ECMA-48 § 8.3.94
-                    # SOS = f"{ESC}X"   # ECMA-48 § 8.3.128
-                    while True:
-                        ch = self._read_char()
-                        seq.append(ch)
-                        if seq[-2:] == [ESC, '\\']:
-                            break
-                elif '@' <= ch <= '_':
-                    pass  # TODO: other type Fe
-                elif '`' <= ch <= '~':
-                    pass  # TODO: type Fs
-                elif '0' <= ch <= '?':
-                    pass  # TODO: type Fp
-                elif ' ' <= ch <= '/':
-                    pass  # TODO: type nF
-                    while True:
-                        ch = self._read_char()
-                        seq.append(ch)
-                        if '0' <= ch <= '~':
-                            break
-                buffer.extend(seq)
             else:
-                buffer.append(ch)
-        return "".join(buffer)
+                buffer.append(char_unit)
+                if char_unit in UNICODE_NEWLINES and break_on_newline:
+                    break
+        return buffer
 
     def read(self, size=-1) -> str:
-        """ Read and return at most size characters from the stream as a
-        single str. If size is negative or None, reads until EOF.
+        """ Read and return at most size character units from the stream as a
+        single string. If size is negative or None, reads until EOF.
 
-        :param size:
+        :param size: number of character units to read
         :returns: string containing the full sequence of characters read
         """
         if size is None or size < 0:
@@ -365,105 +446,308 @@ class TerminalInput(TextIOBase):
             self._check_readable()
             buffer = "".join(self._buffer)
             self._buffer.clear()
-            return buffer + self._channel.read()
+            return buffer + self._stream.read()
         else:
-            return self._read(size=size)
+            return "".join(self._read_units(size=size))
 
     def readable(self):
-        return self._channel.readable()
+        return self._stream.readable()
 
     def readline(self, size=-1, /):
-        return self._read(size=size, break_on_newline=True)
+        return "".join(self._read_units(size=size, break_on_newline=True))
 
     def wait(self, timeout=None) -> bool:
         """ Wait until data is available for reading, or timeout.
         """
         self._check_closed()
         self._check_waitable()
-        ready, _, _ = select([self._channel], [], [], timeout)
+        ready, _, _ = select([self._stream], [], [], timeout)
         return bool(ready)
 
     def waitable(self) -> bool:
-        return hasattr(self._channel, "fileno") and callable(self._channel.fileno)
+        return hasattr(self._stream, "fileno") and callable(self._stream.fileno)
 
 
-def measure_text(text, tab_size: int = 8) -> [int]:
-    r""" Measure the forward advance of one or more lines of text, returning
-    an array of sizes, one per line.
+class TerminalOutput(TextIOBase):
 
-    Notes:
-    - Regular characters occupy one cell
-    - Non-printable characters and escape sequences occupy zero cells
-    - Full width characters occupy two cells
+    def __init__(self, stream=stdout):
+        stream = stream or stdout
+        if not hasattr(stream, "write") or not callable(stream.write):
+            raise ValueError(f"Stream {stream!r} has no write method")
+        if not hasattr(stream, "writable") or not callable(stream.writable) or not stream.writable():
+            raise ValueError(f"Stream {stream!r} is not writable")
+        self._stream = stream
+        self._closed = False
 
-    >>> measure_text("hello, world")
-    [12]
-    >>> measure_text(f"hello, {green}world{reset}")
-    [12]
-    >>> measure_text("hello, ｗｏｒｌｄ")
-    [17]
-    >>> measure_text(f"hello, {green}ｗｏｒｌｄ{reset}")
-    [17]
-    >>> measure_text("hello\nworld")
-    [5, 5]
-    """
-    tin = TerminalInput(StringIO(text))
-    line_widths = []
-    cursor = 0
-    while True:
-        char_seq = tin.read(1)
-        if not char_seq:
-            break
-        # Measurement can generally be taken by looking at only the
-        # first character in a sequence. But C1 control codes might
-        # be represented in expanded ESC+X form, so we should
-        # normalise those.
-        first_char = char_seq[0]
-        if first_char == ESC and len(char_seq) > 1:
-            second_char = char_seq[1]
-            if "@" <= second_char <= "_":
-                # collapse 7-bit C1 control codes to 8-bit equivalents
-                first_char = chr(0x40 + ord(second_char))
-        # Now, check specific edge cases and fall back to checking the
-        # Unicode general category.
-        if first_char in UNICODE_NEWLINES:
-            # This detects:
-            # - CR, LF, CRLF (CRLF will be tested as CR, but whatever)
-            # - NEL (both 7-bit and 8-bit representations)
-            # - VT, FF
-            # - LS, PS
-            line_widths.append(cursor)
-            cursor = 0
-        elif first_char == BS:
-            if cursor > 0:
-                cursor -= 1
-            # width = -1
-        elif first_char == HT:
-            # Advance to next multiple of tab_size. This formula should
-            # only ever return values between 1 and tab_size inclusive.
-            advance = tab_size - (cursor % tab_size)
-            cursor += advance
-        elif first_char < " ":
-            # Other control characters do not affect the cursor:
-            # - NUL, BEL, CAN, EM, SUB, ESC
-            # - TC (SOH, STX, ETX, EOT, ENQ, ACK, DLE, NAK, SYN, ETB)
-            # - LS (SI, SO)
-            # - DC (DC1, DC2, DC3, DC4)
-            # - IS (FS, GS, RS, US)
-            pass  # no advance
-        elif first_char <= "~":
-            # Anything else in ASCII range is printable and one cell wide.
-            cursor += 1
-        elif DEL <= first_char <= APC:
-            # TODO: this isn't true for all of these
-            pass  # no advance
+    def __del__(self):
+        super().__del__()
+
+    def _check_closed(self):
+        if self._closed:
+            raise ValueError("Terminal output is closed")
+
+    def _check_writable(self):
+        if not self.writable():
+            raise OSError("Terminal output is not writable")
+
+    def _color_sgr(self, value, background=False, web_palette_only=False) -> SGR:
+        """ Construct an :py:class:`pansi.codes.SGR` object for a given color value. The input can be any
+        of a hex colour value, a named colour, or an RGB tuple composed of numbers
+        and/or percentages. The string value ``'default'`` can also be passed to
+        explicitly select the terminal default colour.
+
+        Note: alpha values are accepted, but ignored and discarded.
+
+        :param value:
+        :param background:
+        :param web_palette_only: if true, use the web palette for all named
+            colours instead of falling back to terminal palette for basic
+            CGA colours
+        :return: SGR
+        """
+        from pansi.color import WEB_PALETTE, decode_hex_color, rgb
+        default = 49 if background else 39
+        if isinstance(value, tuple):
+            value = rgb(*value)
         else:
-            # For everything else, check the Unicode general category.
-            major, minor = category(first_char)
-            is_printable = major in {'L', 'N', 'P', 'S'} or (major, minor) == ('Z', 's')
-            if is_printable:
-                cursor += (2 if east_asian_width(first_char) in {'F', 'W'} else 1)
+            value = str(value).strip()
+        if value.startswith("#"):
+            c = decode_hex_color(value)
+            return SGR(48 if background else 38, 2,
+                       c[0], c[1], c[2], reset=default)
+        else:
+            name = value.lower()
+            if name == "default":
+                return SGR(default)
+            elif name in CGA_PALETTE and not web_palette_only:
+                fg, bg = CGA_PALETTE[name]
+                return SGR(bg if background else fg, reset=default)
+            elif name in WEB_PALETTE:
+                r, g, b = WEB_PALETTE[name]
+                return SGR(48 if background else 38, 2, r, g, b, reset=default)
             else:
-                pass  # not printable, so no visible size
-    line_widths.append(cursor)
-    return line_widths
+                raise ValueError(f"Unrecognised color name {value!r}")
+
+    def color(self, value, web_palette_only=False) -> str:
+        """ Generate ANSI escape code string for given foreground colour value.
+        """
+        try:
+            sgr = self._color_sgr(value, web_palette_only=web_palette_only)
+        except ValueError:
+            return ""
+        else:
+            return str(sgr)
+
+    def background_color(self, value, web_palette_only=False) -> str:
+        """ Generate ANSI escape code string for given background colour value.
+        """
+        try:
+            sgr = self._color_sgr(value, background=True, web_palette_only=web_palette_only)
+        except ValueError:
+            return ""
+        else:
+            return str(sgr)
+
+    def font_weight(self, value) -> str:
+        r""" Generate ANSI escape sequence for the given font weight. Values
+        correspond to CSS font-weight values 'bold' and 'normal' or numeric
+        equivalents.
+
+        >>> font_weight('bold')
+        '\x1b[1m'
+
+        """
+        try:
+            weight = int(value)
+        except (ValueError, TypeError):
+            # compare as string
+            weight = str(value)
+            if weight == "bold":
+                return str(bold)
+            elif value == "normal":
+                return str(~bold)
+            else:
+                return ""
+        else:
+            # compare as integer
+            if weight > 500:
+                return str(bold)
+            elif weight < 400:
+                return str(light)
+            else:
+                return str(~bold)
+
+    def font_style(self, value) -> str:
+        r""" Generate ANSI escape sequence for the given font style.
+        """
+        value = str(value)
+        if value in {"italic", "oblique"}:
+            return str(italic)
+        elif value == "normal":
+            return str(~italic)
+        else:
+            return ""
+
+    def text_decoration(self, value) -> str:
+        r""" Generate ANSI escape sequence for the given text-decoration value.
+
+        >>> self.text_decoration('underline')
+        '\x1b[4m'
+
+        """
+        values = str(value).lower().split()
+        codes = []
+        if "underline" in values:
+            if "double" in values:
+                codes.append(double_underline)
+            else:
+                codes.append(underline)
+        if "blink" in values:
+            codes.append(blink)
+        if "line-through" in values:
+            codes.append(line_through)
+        if "overline" in values:
+            codes.append(overline)
+        return "".join(map(str, codes))
+
+    def write(self, s, /,
+              color=None,
+              background_color=None,
+              font_weight=None,
+              font_style=None,
+              text_decoration=None,
+              vertical_align=None):
+        if vertical_align == "sub":
+            text = str(s).translate(TO_SUBSCRIPT)
+        elif vertical_align == "super":
+            text = str(s).translate(TO_SUPERSCRIPT)
+        else:
+            text = str(s)
+        seq = [
+            self.color(color),
+            self.background_color(background_color),
+            self.font_weight(font_weight),
+            self.font_style(font_style),
+            self.text_decoration(text_decoration),
+        ]
+        prefix = ''.join(map(str, seq))
+        if prefix:
+            # If the text contains newlines (e.g. <pre>) then we should add
+            # the style codes to each line. Without this, styled output
+            # displayed in applications like `less` applies the style to
+            # the first line only.
+            units = []
+            for line in text.splitlines(keepends=True):
+                # Break the line into char sequences
+                line_units = list(TerminalInput(StringIO(line)))
+                # Separate out trailing newlines
+                newlines = []
+                while line_units and line_units[-1] in UNICODE_NEWLINES:
+                    newlines.insert(0, line_units.pop(-1))
+                # Store the prefix
+                units.append(prefix)
+                # Store the line content (without newlines)
+                units.extend(line_units)
+                # Store a reset if one does not already exist
+                if line_units[-1] not in {f"{CSI}0m", f"{CSI}m"}:
+                    units.append(reset)
+                # Store the newlines
+                units.extend(newlines)
+            self._stream.write("".join(map(str, units)))
+        else:
+            self._stream.write(text)
+
+    def writable(self) -> bool:
+        return self._stream.writable()
+
+    def writelines(self, lines, /,
+                   color=None,
+                   background_color=None,
+                   font_weight=None,
+                   font_style=None,
+                   text_decoration=None,
+                   vertical_align=None):
+        for line in lines:
+            self.write(line, color, background_color, font_weight,
+                       font_style, text_decoration, vertical_align)
+
+    def measure(self, text, tab_size: int = 8) -> [int]:
+        r""" Measure the total forward advance of one or more lines of text,
+        returning an array of measurements, one per line.
+
+        Notes:
+        - Regular characters occupy one cell
+        - Non-printable characters and escape sequences occupy zero cells
+        - Full width characters occupy two cells
+
+        >>> self.measure("hello, world")
+        [12]
+        >>> self.measure(f"hello, {green}world{reset}")
+        [12]
+        >>> self.measure("hello, ｗｏｒｌｄ")
+        [17]
+        >>> self.measure(f"hello, {green}ｗｏｒｌｄ{reset}")
+        [17]
+        >>> self.measure("hello\nworld")
+        [5, 5]
+        """
+        tin = TerminalInput(StringIO(text))
+        measurements = []
+        cursor = 0
+        while True:
+            char_seq = tin.read(1)
+            if not char_seq:
+                break
+            # Measurement can generally be taken by looking at only the
+            # first character in a sequence. But C1 control codes might
+            # be represented in expanded ESC+X form, so we should
+            # normalise those.
+            first_char = char_seq[0]
+            if first_char == ESC and len(char_seq) > 1:
+                second_char = char_seq[1]
+                if "@" <= second_char <= "_":
+                    # collapse 7-bit C1 control codes to 8-bit equivalents
+                    first_char = chr(0x40 + ord(second_char))
+            # Now, check specific edge cases and fall back to checking the
+            # Unicode general category.
+            if first_char in UNICODE_NEWLINES:
+                # This detects:
+                # - CR, LF, CRLF (CRLF will be tested as CR, but whatever)
+                # - NEL (both 7-bit and 8-bit representations)
+                # - VT, FF
+                # - LS, PS
+                measurements.append(cursor)
+                cursor = 0
+            elif first_char == BS:
+                if cursor > 0:
+                    cursor -= 1
+                # width = -1
+            elif first_char == HT:
+                # Advance to next multiple of tab_size. This formula should
+                # only ever return values between 1 and tab_size inclusive.
+                advance = tab_size - (cursor % tab_size)
+                cursor += advance
+            elif first_char < " ":
+                # Other control characters do not affect the cursor:
+                # - NUL, BEL, CAN, EM, SUB, ESC
+                # - TC (SOH, STX, ETX, EOT, ENQ, ACK, DLE, NAK, SYN, ETB)
+                # - LS (SI, SO)
+                # - DC (DC1, DC2, DC3, DC4)
+                # - IS (FS, GS, RS, US)
+                pass  # no advance
+            elif first_char <= "~":
+                # Anything else in ASCII range is printable and one cell wide.
+                cursor += 1
+            elif DEL <= first_char <= APC:
+                # TODO: this isn't true for all of these
+                pass  # no advance
+            else:
+                # For everything else, check the Unicode general category.
+                major, minor = category(first_char)
+                is_printable = major in {'L', 'N', 'P', 'S'} or (major, minor) == ('Z', 's')
+                if is_printable:
+                    cursor += (2 if east_asian_width(first_char) in {'F', 'W'} else 1)
+                else:
+                    pass  # not printable, so no visible size
+        measurements.append(cursor)
+        return measurements

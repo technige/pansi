@@ -45,15 +45,15 @@ class HexViewer:
         else:
             return int(count + 1)
 
-    def on_keypress(self, data):
-        if data == f"{CSI}A" and self.line_offset > 0:
+    def on_keypress(self, event):
+        if event.key == f"{CSI}A" and self.line_offset > 0:
             self.line_offset -= 1
             self.render()
-        elif data == f"{CSI}B" and self.line_offset < self.data_lines - self.terminal.get_size().lines + 1:
+        elif event.key == f"{CSI}B" and self.line_offset < self.data_lines - self.terminal.get_size().lines + 1:
             self.line_offset += 1
             self.render()
 
-    def on_resize(self, data):
+    def on_resize(self, _event):
         self.render()
 
     def run(self):

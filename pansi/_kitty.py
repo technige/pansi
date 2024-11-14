@@ -21,16 +21,16 @@
 
 from re import compile as re_compile
 
-from pansi import APC, CSI, ST
+from ._codes import APC, CSI, ST
 
 
 def get_kitty_info(terminal):
     info = {}
     identifier = 31
 
-    def on_apc(data):
+    def on_apc(event):
         pattern = re_compile(r"\x1B_Gi=(\d+);([^\x1B]*)\x1B\\")
-        match = pattern.match(data)
+        match = pattern.match(event.key)
         if match and match.group(1) == str(identifier):
             info["kitty_graphics_protocol"] = match.group(2)
 

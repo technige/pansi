@@ -21,7 +21,6 @@ from io import StringIO
 from unicodedata import category, east_asian_width
 
 from ._codes import BS, HT, ESC, DEL, APC, UNICODE_NEWLINES
-from ._term import TerminalInput
 
 
 CursorPosition = namedtuple("CursorPosition", ["line", "column"])
@@ -48,6 +47,7 @@ def measure_text(text, tab_size: int = 8) -> [int]:
     >>> measure_text("hello\nworld")
     [5, 5]
     """
+    from ._term import TerminalInput
     tin = TerminalInput(StringIO(text))
     measurements = []
     cursor = 0

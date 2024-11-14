@@ -28,8 +28,28 @@ from termios import tcgetattr, tcsetattr, TCSAFLUSH, TIOCGWINSZ
 from time import monotonic
 from tty import setraw, setcbreak
 
-from ._codes import CSI, APC
+from ._codes import CR, LF, ESC, CSI, APC, UNICODE_NEWLINES
+from ._sgr import reset
 from ._measurement import CursorPosition, RectangularArea
+
+
+class Event:
+
+    def __init__(self, event_type):
+        self.type = event_type
+
+    def __repr__(self):
+        return f"{type(self).__name__}(event_type={self.type!r})"
+
+
+class KeyboardEvent(Event):
+
+    def __init__(self, event_type, key):
+        super().__init__(event_type)
+        self.key = key
+
+    def __repr__(self):
+        return f"{type(self).__name__}(event_type={self.type!r}, key={self.key!r})"
 
 
 class TerminalInput(TextIOBase):
@@ -304,7 +324,7 @@ class Terminal:
         self._input = TerminalInput(cin)
         self._output = TerminalOutput(cout)
         self._event_listeners = {}
-        signal(SIGWINCH, lambda _signal, _frame: self._dispatch_event("resize", self.get_size()))
+        signal(SIGWINCH, lambda _signal, _frame: self._dispatch_event(Event("resize")))
 
     def add_event_listener(self, event_type, listener):
         self._event_listeners.setdefault(event_type, []).append(listener)
@@ -320,35 +340,34 @@ class Terminal:
             except ValueError:
                 pass  # no such listener
 
-    def _dispatch_event(self, event_type, data):
-        for listener in self._event_listeners.get(event_type, []):
+    def _dispatch_event(self, event):
+        for listener in self._event_listeners.get(event.type, []):
             if callable(listener):
-                listener(data)
+                listener(event)
 
     def loop(self, /, until=None, timeout=None):
         t0 = monotonic()
         remaining = timeout
         while timeout is None or remaining >= 0:
             if timeout is None:
-                char_seq = self._input.read(1)
+                char_unit = self._input.read(1)
             else:
                 elapsed = monotonic() - t0
                 remaining = timeout - elapsed
                 if self._input.wait(timeout=max(0, remaining)):
-                    char_seq = self._input.read(1)
+                    char_unit = self._input.read(1)
                 else:
                     break
             if until:
-                match = until.match(char_seq)
+                match = until.match(char_unit)
                 if match:
                     # print(f"Found match after {monotonic() - t0}s")
                     return match
             # TODO: handle mouse events separately, if possible
-            if char_seq.startswith(APC):
-                event_type = "__apc__"
+            if char_unit.startswith(APC):
+                self._dispatch_event(KeyboardEvent("__apc__", key=char_unit))
             else:
-                event_type = "keypress"
-            self._dispatch_event(event_type, char_seq)
+                self._dispatch_event(KeyboardEvent("keypress", key=char_unit))
         return None
 
     def get_info(self):

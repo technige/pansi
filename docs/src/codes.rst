@@ -105,3 +105,14 @@ Code  Attribute      ASCII/Unicode Name                        Escape      Stand
 
     A translation table for use with :py:func:`str.translate` that maps C1
     control characters to their 7-bit escape sequence alternatives.
+
+
+Newlines
+========
+
+.. data:: CRLF
+.. data:: UNICODE_NEWLINES
+
+
+.. seealso::
+    - `Unicode 16.0.0 -- 5.8 Newline Guidelines <https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-5/#G10213>`_

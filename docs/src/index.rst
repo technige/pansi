@@ -24,16 +24,13 @@ modules exist to provide additional functionality.
 
 .. module:: pansi
 
-Control codes
--------------
+Control codes and character sequences
+-------------------------------------
 Pansi provides predefined variables for all C0 and C1 control codes available
 in ASCII and Unicode. These include :py:attr:`ESC`, which is most commonly
 used to introduce a terminal escape sequence. For a full list of available
 codes, visit the `Pansi control code reference <codes.html>`_.
 
-
-CSI sequences
--------------
 By far the most common C1 control character to encounter in the wild is
 :py:attr:`CSI`. As per its name, this introduces control sequences that are
 typically used to control the environment within a terminal or terminal
@@ -44,9 +41,6 @@ The CSI function is typically identified by the final character of the
 sequence. In the example above, this is ``'J'``. In between, a number of
 stringified base-10 integer values are included, separated by semicolons.
 
-
-SGR sequences
--------------
 Most modern terminal emulation software comes with the ability to colour and
 style text. This functionality is accessed via a particular subset
 of CSI sequences called Select Graphic Rendition (SGR) control sequences.
@@ -70,6 +64,8 @@ To reset the foreground colour back to its default, for example, a single
 parameter with value 39 can be used.
 
 .. autoclass:: SGR
+
+.. method:: for_color
 
 .. data:: reset
 .. data:: bold
@@ -130,12 +126,5 @@ parameter with value 39 can be used.
     - `XTerm Control Sequences -- Functions using CSI <https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-Functions-using-CSI-_-ordered-by-the-final-character_s_>`_
 
 
-Newlines
-========
-
-.. data:: CRLF
-.. data:: UNICODE_NEWLINES
-
-
-.. seealso::
-    - `Unicode 16.0.0 -- 5.8 Newline Guidelines <https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-5/#G10213>`_
+.. autoclass:: TerminalInput
+.. autoclass:: TerminalOutput

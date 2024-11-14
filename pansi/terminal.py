@@ -27,11 +27,10 @@ from termios import tcgetattr, tcsetattr, TCSAFLUSH, TIOCGWINSZ
 from time import monotonic
 from tty import setcbreak
 
-from pansi import CSI, TerminalInput
+from pansi import CSI, TerminalInput, APC
 
-
-pos = namedtuple("pos", ["line", "column"])
-rect = namedtuple("rect", ["lines", "columns", "pixel_width", "pixel_height"])
+CursorPosition = namedtuple("CursorPosition", ["line", "column"])
+RectangularArea = namedtuple("RectangularArea", ["lines", "columns", "pixel_width", "pixel_height"])
 
 
 class Terminal:
@@ -46,8 +45,16 @@ class Terminal:
     def add_event_listener(self, event_type, listener):
         self._event_listeners.setdefault(event_type, []).append(listener)
 
-    def remove_event_listener(self):
-        raise NotImplementedError
+    def remove_event_listener(self, event_type, listener):
+        try:
+            listeners = self._event_listeners[event_type]
+        except KeyError:
+            pass  # no such event type
+        else:
+            try:
+                listeners.remove(listener)
+            except ValueError:
+                pass  # no such listener
 
     def _dispatch_event(self, event_type, data):
         for listener in self._event_listeners.get(event_type, []):
@@ -73,10 +80,20 @@ class Terminal:
                     # print(f"Found match after {monotonic() - t0}s")
                     return match
             # TODO: handle mouse events separately, if possible
-            self._dispatch_event("keypress", char_seq)
+            if char_seq.startswith(APC):
+                event_type = "__apc__"
+            else:
+                event_type = "keypress"
+            self._dispatch_event(event_type, char_seq)
         return None
 
-    def get_size(self) -> rect:
+    def get_info(self):
+        info = {}
+        from ._kitty import get_kitty_info
+        info.update(get_kitty_info(self))
+        return info
+
+    def get_size(self) -> RectangularArea:
         try:
             buffer = pack('HHHH', 0, 0, 0, 0)
             fd = os_open(ctermid(), O_RDONLY)
@@ -106,14 +123,14 @@ class Terminal:
             else:
                 pixel_height = 16 * lines
                 pixel_width = 8 * columns
-        return rect(lines, columns, pixel_width, pixel_height)
+        return RectangularArea(lines, columns, pixel_width, pixel_height)
 
-    def get_cursor_position(self) -> pos:
+    def get_cursor_position(self) -> CursorPosition:
         self._cout.write(f"{CSI}6n")
         self._cout.flush()
         match = self.loop(until=re_compile(r"\x1B\[(\d*);(\d*)R"), timeout=0.025)
         if match:
-            return pos(line=int(match.group(1)), column=int(match.group(2)))
+            return CursorPosition(line=int(match.group(1)), column=int(match.group(2)))
         else:
             raise OSError("Cursor position unavailable")
 
@@ -156,6 +173,9 @@ class Terminal:
 
     def flush(self):
         self._cout.flush()
+
+    def draw(self, image, /, method="auto"):
+        raise NotImplementedError
 
 
 class Demo:

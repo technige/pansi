@@ -75,26 +75,6 @@ class Terminal:
     def cell_height(self):
         return self.pixel_height // self.char_height
 
-    def fit_image(self, image, reserved_lines=1):
-        width, height = image.width, image.height
-        aspect_ratio = width / height
-        max_height = self.pixel_height - (reserved_lines * self.cell_height)
-        resize = False
-        if height > max_height:
-            height = max_height
-            width = height * aspect_ratio
-            resize = True
-        if width > self.pixel_width:
-            width = self.pixel_width
-            height = width / aspect_ratio
-            resize = True
-        if resize:
-            width = int(round(width))
-            height = int(round(height))
-            return image.resize((width, height))
-        else:
-            return image
-
 
 class TerminalImage:
 

@@ -121,6 +121,46 @@ class SGR:
     optional reset code.
     """
 
+    @classmethod
+    def for_color(cls, value, background=False, web_palette_only=False):
+        """ Construct an :py:class:`pansi.SGR` object for a given color value.
+        The input can be either a hex colour value, a named colour, or an RGB
+        tuple composed of numbers and/or percentages. The literal string value
+        ``'default'`` can also be passed to explicitly select the terminal
+        default colour.
+
+        Note: alpha values are accepted, but ignored and discarded.
+
+        :param value:
+        :param background:
+        :param web_palette_only: if true, use the web palette for all named
+            colours instead of falling back to terminal palette for basic
+            CGA colours
+        :return: SGR
+        """
+        from pansi.color import WEB_PALETTE, decode_hex_color, rgb
+        default = 49 if background else 39
+        if isinstance(value, tuple):
+            value = rgb(*value)
+        else:
+            value = str(value).strip()
+        if value.startswith("#"):
+            c = decode_hex_color(value)
+            return cls(48 if background else 38, 2,
+                       c[0], c[1], c[2], reset=default)
+        else:
+            name = value.lower()
+            if name == "default":
+                return cls(default)
+            elif name in CGA_PALETTE and not web_palette_only:
+                fg, bg = CGA_PALETTE[name]
+                return cls(bg if background else fg, reset=default)
+            elif name in WEB_PALETTE:
+                r, g, b = WEB_PALETTE[name]
+                return cls(48 if background else 38, 2, r, g, b, reset=default)
+            else:
+                raise ValueError(f"Unrecognised color name {value!r}")
+
     def __init__(self, *parameters, reset=None):
         self.parameters = parameters
         if not reset:
@@ -490,49 +530,11 @@ class TerminalOutput(TextIOBase):
         if not self.writable():
             raise OSError("Terminal output is not writable")
 
-    def _color_sgr(self, value, background=False, web_palette_only=False) -> SGR:
-        """ Construct an :py:class:`pansi.codes.SGR` object for a given color value. The input can be any
-        of a hex colour value, a named colour, or an RGB tuple composed of numbers
-        and/or percentages. The string value ``'default'`` can also be passed to
-        explicitly select the terminal default colour.
-
-        Note: alpha values are accepted, but ignored and discarded.
-
-        :param value:
-        :param background:
-        :param web_palette_only: if true, use the web palette for all named
-            colours instead of falling back to terminal palette for basic
-            CGA colours
-        :return: SGR
-        """
-        from pansi.color import WEB_PALETTE, decode_hex_color, rgb
-        default = 49 if background else 39
-        if isinstance(value, tuple):
-            value = rgb(*value)
-        else:
-            value = str(value).strip()
-        if value.startswith("#"):
-            c = decode_hex_color(value)
-            return SGR(48 if background else 38, 2,
-                       c[0], c[1], c[2], reset=default)
-        else:
-            name = value.lower()
-            if name == "default":
-                return SGR(default)
-            elif name in CGA_PALETTE and not web_palette_only:
-                fg, bg = CGA_PALETTE[name]
-                return SGR(bg if background else fg, reset=default)
-            elif name in WEB_PALETTE:
-                r, g, b = WEB_PALETTE[name]
-                return SGR(48 if background else 38, 2, r, g, b, reset=default)
-            else:
-                raise ValueError(f"Unrecognised color name {value!r}")
-
     def color(self, value, web_palette_only=False) -> str:
         """ Generate ANSI escape code string for given foreground colour value.
         """
         try:
-            sgr = self._color_sgr(value, web_palette_only=web_palette_only)
+            sgr = SGR.for_color(value, web_palette_only=web_palette_only)
         except ValueError:
             return ""
         else:
@@ -542,7 +544,7 @@ class TerminalOutput(TextIOBase):
         """ Generate ANSI escape code string for given background colour value.
         """
         try:
-            sgr = self._color_sgr(value, background=True, web_palette_only=web_palette_only)
+            sgr = SGR.for_color(value, background=True, web_palette_only=web_palette_only)
         except ValueError:
             return ""
         else:
@@ -553,7 +555,7 @@ class TerminalOutput(TextIOBase):
         correspond to CSS font-weight values 'bold' and 'normal' or numeric
         equivalents.
 
-        >>> font_weight('bold')
+        >>> self.font_weight('bold')
         '\x1b[1m'
 
         """

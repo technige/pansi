@@ -16,6 +16,8 @@
 # limitations under the License.
 
 
+from re import compile as re_compile
+
 from pansi import Terminal
 
 
@@ -27,17 +29,17 @@ class Demo:
         self.terminal.add_event_listener("resize", self.on_resize)
 
     def on_keypress(self, event):
-        self.terminal.print(f"Input event (event = {event!r})")
+        self.terminal.print(f"Input event {event!r}")
 
     def on_resize(self, event):
-        self.terminal.print(f"Resize event (event = {event!r})")
+        self.terminal.print(f"Resize event {event!r}")
 
     def run(self):
         self.terminal.hide_cursor()
-        self.terminal.show_alternate_screen()
+        self.terminal.show_alternate_screen(mode="raw")
         try:
             self.terminal.set_cursor_position(0, 0)
-            self.terminal.loop()
+            self.terminal.loop(until=re_compile(r"[Qq]"))
         except KeyboardInterrupt:
             pass
         finally:

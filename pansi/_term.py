@@ -28,7 +28,7 @@ from termios import tcgetattr, tcsetattr, TCSAFLUSH, TIOCGWINSZ
 from time import monotonic
 from tty import setraw, setcbreak
 
-from ._codes import CR, LF, ESC, CSI, APC, UNICODE_NEWLINES
+from ._codes import CR, LF, ESC, SS3, CSI, APC, UNICODE_NEWLINES
 from ._sgr import reset
 from ._measurement import CursorPosition, RectangularArea
 
@@ -77,22 +77,62 @@ class KeyboardEvent(Event):
         # TODO: move this to _codes
         if self.key.startswith(CSI):
             function = self.key[-1]
-            if function == "A":
-                count, _, modifiers = self.key[2:-1].partition(";")
-                self.name = "CUU"
-                self._resolve_modifiers(modifiers)
-            elif function == "B":
-                count, _, modifiers = self.key[2:-1].partition(";")
-                self.name = "CUD"
-                self._resolve_modifiers(modifiers)
-            elif function == "C":
-                count, _, modifiers = self.key[2:-1].partition(";")
-                self.name = "CUF"
-                self._resolve_modifiers(modifiers)
-            elif function == "D":
-                count, _, modifiers = self.key[2:-1].partition(";")
-                self.name = "CUB"
-                self._resolve_modifiers(modifiers)
+            n, _, modifiers = self.key[2:-1].partition(";")
+            self._resolve_modifiers(modifiers)
+            if function == "~":
+                self.name = {
+                    2: "INS",
+                    3: "DEL",
+                    5: "PGUP",
+                    6: "PGDN",
+                    13: "F3",
+                    15: "F5",
+                    17: "F6",
+                    18: "F7",
+                    19: "F8",
+                    20: "F9",
+                    21: "F10",
+                    23: "F11",
+                    24: "F12",
+                }.get(int(n), "")
+            elif function == "u":
+                self.name = {
+                    57362: "PAUSE",
+                }.get(int(n), "")
+            elif function == "Z":
+                self.name = "TAB"
+                self.shift_key = True
+            else:
+                self.name = {
+                    "A": "UP",
+                    "B": "DOWN",
+                    "C": "RIGHT",
+                    "D": "LEFT",
+                    "F": "END",
+                    "H": "HOME",
+                    "I": "TAB",
+                    "P": "F1",
+                    "Q": "F2",
+                    "R": "F3",
+                    "S": "F4",
+                }.get(function, "")
+        elif self.key.startswith(SS3):
+            function = self.key[-1]
+            n, _, modifiers = self.key[2:-1].partition(";")
+            self._resolve_modifiers(modifiers)
+            self.name = {
+                " ": "SP",
+                "A": "UP",
+                "B": "DOWN",
+                "C": "RIGHT",
+                "D": "LEFT",
+                "H": "HOME",
+                "I": "TAB",
+                "P": "F1",
+                "Q": "F2",
+                "R": "F3",
+                "S": "F4",
+            }.get(function, "")
 
     def _resolve_modifiers(self, modifiers):
         # https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-PC-Style-Function-Keys
@@ -473,10 +513,10 @@ class Terminal:
     def clear(self):
         self._output.write(f"{CSI}H{CSI}2J")
 
-    def show_alternate_screen(self):
+    def show_alternate_screen(self, mode="cbreak"):
         self._output.write(f"{CSI}?1049h")
         self._output.flush()
-        self._output.set_tty_mode("cbreak")
+        self._output.set_tty_mode(mode)
 
     def hide_alternate_screen(self):
         self._output.reset_tty_mode()
@@ -505,7 +545,7 @@ class Terminal:
     def flush(self):
         self._output.flush()
 
-    def print(self, *objects, sep=' ', end='\n', flush=False, **style):
+    def print(self, *objects, sep=' ', end='\r\n', flush=False, **style):
         """ Print one or more objects to the terminal output.
 
         This method is largely compatible with the builtin ``print`` function,

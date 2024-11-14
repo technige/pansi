@@ -19,6 +19,8 @@
 from io import StringIO, TextIOBase
 from select import select
 from sys import stdin, stdout
+from termios import tcgetattr, tcsetattr, TCSAFLUSH
+from tty import setraw, setcbreak
 from unicodedata import category, east_asian_width
 
 
@@ -517,6 +519,7 @@ class TerminalOutput(TextIOBase):
         if not hasattr(stream, "writable") or not callable(stream.writable) or not stream.writable():
             raise ValueError(f"Stream {stream!r} is not writable")
         self._stream = stream
+        self._original_mode = tcgetattr(self._stream)
         self._closed = False
 
     def __del__(self):
@@ -529,6 +532,17 @@ class TerminalOutput(TextIOBase):
     def _check_writable(self):
         if not self.writable():
             raise OSError("Terminal output is not writable")
+
+    def set_tty_mode(self, value):
+        if value == "raw":
+            setraw(self._stream, TCSAFLUSH)
+        elif value == "cbreak":
+            setcbreak(self._stream, TCSAFLUSH)
+        else:
+            raise ValueError(f"Unsupported tty mode {value!r}")
+
+    def reset_tty_mode(self):
+        tcsetattr(self._stream, TCSAFLUSH, self._original_mode)
 
     def color(self, value, web_palette_only=False) -> str:
         """ Generate ANSI escape code string for given foreground colour value.
@@ -611,6 +625,9 @@ class TerminalOutput(TextIOBase):
         if "overline" in values:
             codes.append(overline)
         return "".join(map(str, codes))
+
+    def flush(self):
+        self._stream.flush()
 
     def write(self, s, /,
               color=None,

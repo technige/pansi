@@ -23,11 +23,11 @@ from signal import signal, SIGWINCH
 from struct import pack, unpack
 from re import compile as re_compile
 from sys import stdin, stdout
-from termios import tcgetattr, tcsetattr, TCSAFLUSH, TIOCGWINSZ
+from termios import TIOCGWINSZ
 from time import monotonic
-from tty import setcbreak
 
-from pansi import CSI, TerminalInput, APC
+from pansi import CSI, APC, TerminalInput, TerminalOutput
+
 
 CursorPosition = namedtuple("CursorPosition", ["line", "column"])
 RectangularArea = namedtuple("RectangularArea", ["lines", "columns", "pixel_width", "pixel_height"])
@@ -37,8 +37,7 @@ class Terminal:
 
     def __init__(self, cin=stdin, cout=stdout):
         self._input = TerminalInput(cin)
-        self._cout = cout
-        self._normal_mode = None        # used to store mode when switching to alternate screen
+        self._output = TerminalOutput(cout)
         self._event_listeners = {}
         signal(SIGWINCH, lambda _signal, _frame: self._dispatch_event("resize", self.get_size()))
 
@@ -104,8 +103,8 @@ class Terminal:
         else:
             lines, columns, pixel_width, pixel_height = unpack('HHHH', result)
         if lines == 0 and columns == 0:
-            self._cout.write(f"{CSI}18t")
-            self._cout.flush()
+            self._output.write(f"{CSI}18t")
+            self._output.flush()
             match = self.loop(until=re_compile(r"\x1B\[8;(\d*);(\d*)t"), timeout=0.025)
             if match:
                 lines = int(match.group(1))
@@ -114,8 +113,8 @@ class Terminal:
                 lines = 24
                 columns = 80
         if pixel_width == 0 and pixel_height == 0:
-            self._cout.write(f"{CSI}14t")
-            self._cout.flush()
+            self._output.write(f"{CSI}14t")
+            self._output.flush()
             match = self.loop(until=re_compile(r"\x1B\[4;(\d*);(\d*)t"), timeout=0.025)
             if match:
                 pixel_height = int(match.group(1))
@@ -126,8 +125,8 @@ class Terminal:
         return RectangularArea(lines, columns, pixel_width, pixel_height)
 
     def get_cursor_position(self) -> CursorPosition:
-        self._cout.write(f"{CSI}6n")
-        self._cout.flush()
+        self._output.write(f"{CSI}6n")
+        self._output.flush()
         match = self.loop(until=re_compile(r"\x1B\[(\d*);(\d*)R"), timeout=0.025)
         if match:
             return CursorPosition(line=int(match.group(1)), column=int(match.group(2)))
@@ -135,29 +134,28 @@ class Terminal:
             raise OSError("Cursor position unavailable")
 
     def set_cursor_position(self, /, line, column):
-        self._cout.write(f"{CSI}{line};{column}H")
+        self._output.write(f"{CSI}{line};{column}H")
 
     def clear(self):
-        self._cout.write(f"{CSI}H{CSI}2J")
+        self._output.write(f"{CSI}H{CSI}2J")
 
     def show_alternate_screen(self):
-        self._cout.write(f"{CSI}?1049h")
-        self._cout.flush()
-        self._normal_mode = tcgetattr(self._cout)
-        setcbreak(self._cout)
+        self._output.write(f"{CSI}?1049h")
+        self._output.flush()
+        self._output.set_tty_mode("cbreak")
 
     def hide_alternate_screen(self):
-        tcsetattr(self._cout, TCSAFLUSH, self._normal_mode)
-        self._cout.write(f"{CSI}?1049l")
-        self._cout.flush()
+        self._output.reset_tty_mode()
+        self._output.write(f"{CSI}?1049l")
+        self._output.flush()
 
     def show_cursor(self):
-        self._cout.write(f"{CSI}?25h")
-        self._cout.flush()
+        self._output.write(f"{CSI}?25h")
+        self._output.flush()
 
     def hide_cursor(self):
-        self._cout.write(f"{CSI}?25l")
-        self._cout.flush()
+        self._output.write(f"{CSI}?25l")
+        self._output.flush()
 
     # def keypad_on(self):
     #     self._cout.write(f"{CSI}?1h{ESC}=")
@@ -167,12 +165,45 @@ class Terminal:
     #     self._cout.write(f"{CSI}?1l{ESC}>")
     #     self._cout.flush()
 
-    def write(self, *values):
-        for value in values:
-            self._cout.write(str(value))
+    def write(self, s, /, **style):
+        self._output.write(s, **style)
 
     def flush(self):
-        self._cout.flush()
+        self._output.flush()
+
+    def print(self, *objects, sep=' ', end='\n', flush=False, **style):
+        """ Print one or more objects to the terminal output.
+
+        This method is largely compatible with the builtin ``print`` function,
+        missing only the `file` argument and supporting a number of additional
+        keyword arguments.
+
+        As with :py:func:`print`, all non-keyword arguments are converted to
+        strings using :py:func:`str`, but also with styling applied if any
+        `style` keywords are supplied.
+
+        The full list of supported style keywords are documented as part of the
+        :meth:`TerminalOutput.write` method, but include the following:
+
+        - ``color``
+        - ``background_color``
+        - ``font_weight``
+        - ``font_style``
+        - ``text_decoration``
+
+        :param objects:
+        :param sep:
+        :param end:
+        :param flush:
+        :param style:
+        """
+        for i, obj in enumerate(objects):
+            if i > 0:
+                self._output.write(sep)
+            self._output.write(str(obj), **style)
+        self._output.write(end)
+        if flush:
+            self._output.flush()
 
     def draw(self, image, /, method="auto"):
         raise NotImplementedError

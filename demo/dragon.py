@@ -16,15 +16,12 @@
 # limitations under the License.
 
 
-from pansi import black_bg, invert, reset
-from pansi.text import color, background_color
+from pansi.terminal import Terminal
 
 
-print(f"""\
-{color('#040')}{background_color('#0F0')} !"#$%&'()*+,-./0123456789:;<=>?
-@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]↑←
-{invert}@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]↑←{~invert}
-{color('#0F0')}{black_bg} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█{color('#FF0')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█
-{color('#00F')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█{color('#F00')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█
-{color('#FFF')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█{color('#0FF')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█
-{color('#F0F')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█{color('#FF8000')} ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█{reset}""")
+term = Terminal()
+term.print(" !\"#$%&'()*+,-./0123456789:;<=>?", color="#040", background_color="#0F0")
+term.print("@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]↑←", color="#040", background_color="#0F0")
+term.print("@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]↑←", color="#0F0", background_color="#040")
+for i, fg in enumerate(["#0F0", "#FF0", "#00F", "#F00", "#FFF", "#0FF", "#F0F", "#FF8000"]):
+    term.print(" ▗▖▄▝▐▞▟▘▚▌▙▀▜▛█", color=fg, background_color="black", end=("" if i % 2 == 0 else "\n"))

@@ -31,7 +31,7 @@ class HexViewer:
             return cls(f.read())
 
     def __init__(self, data):
-        self.terminal = Terminal(full_screen=True)
+        self.terminal = Terminal()
         self.terminal.add_event_listener("keypress", self.on_keypress)
         self.terminal.add_event_listener("resize", self.on_resize)
         self.data = data
@@ -57,14 +57,18 @@ class HexViewer:
         self.render()
 
     def run(self):
+        self.terminal.set_tty_mode("cbreak")
         self.terminal.cursor.hide()
+        self.terminal.screen(buffer="alternate")
         try:
             self.render()
             self.terminal.loop()
         except KeyboardInterrupt:
             pass
         finally:
-            pass
+            self.terminal.screen(buffer="normal")
+            self.terminal.cursor.show()
+            self.terminal.reset_tty_mode()
 
     def render(self):
         byte_offset = self.line_offset * self.line_width

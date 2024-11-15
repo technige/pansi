@@ -414,18 +414,12 @@ class TerminalOutput(TextIOBase):
 
 class Terminal:
 
-    def __init__(self, full_screen=False, raw=False, input_stream=None, output_stream=None):
+    def __init__(self, input_stream=None, output_stream=None):
         self._input = TerminalInput(input_stream)
         self._output = TerminalOutput(output_stream)
         self._cursor = Cursor(self)
         self._event_listeners = {}
         signal(SIGWINCH, lambda _signal, _frame: self._dispatch_event(Event("resize")))
-        if full_screen:
-            self.screen(buffer="alternate")
-            self.set_tty_mode("raw" if raw else "cbreak")
-
-    def __del__(self):
-        self.close()
 
     @property
     def cursor(self):
@@ -527,7 +521,6 @@ class Terminal:
     def screen(self, buffer="normal"):
         if buffer == "alternate":
             self._output.write(f"{CSI}?1049h")
-            self._output.write(f"{CSI}H{CSI}2J")
             self._output.flush()
         elif buffer == "normal":
             self._output.write(f"{CSI}?1049l")
@@ -537,10 +530,6 @@ class Terminal:
         self._output.set_tty_mode(tty_mode)
 
     def reset_tty_mode(self):
-        self._output.reset_tty_mode()
-
-    def close(self):
-        self.screen(buffer="normal")
         self._output.reset_tty_mode()
 
     # def keypad_on(self):
@@ -601,9 +590,6 @@ class Cursor:
 
     def __init__(self, terminal):
         self._terminal = terminal
-
-    def __del__(self):
-        self.show()
 
     def show(self):
         self._terminal.write(f"{CSI}?25h")

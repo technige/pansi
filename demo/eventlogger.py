@@ -24,7 +24,7 @@ from pansi import Terminal
 class EventLogger:
 
     def __init__(self):
-        self.terminal = Terminal(full_screen=True, raw=True)
+        self.terminal = Terminal()
         self.terminal.add_event_listener("keypress", self.on_keypress)
         self.terminal.add_event_listener("resize", self.on_resize)
 
@@ -36,11 +36,18 @@ class EventLogger:
         self.terminal.print(f"Terminal size = {self.terminal.get_size()!r}")
 
     def run(self):
+        self.terminal.set_tty_mode("raw")
         self.terminal.cursor.hide()
+        self.terminal.screen(buffer="alternate")
         try:
+            self.terminal.clear()
             self.terminal.loop(break_key="\x03")
         except KeyboardInterrupt:
             pass
+        finally:
+            self.terminal.screen(buffer="normal")
+            self.terminal.cursor.show()
+            self.terminal.reset_tty_mode()
 
 
 def main():

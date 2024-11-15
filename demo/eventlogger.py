@@ -39,7 +39,7 @@ class Demo:
         self.terminal.show_alternate_screen(mode="raw")
         try:
             self.terminal.set_cursor_position(0, 0)
-            self.terminal.loop(until=re_compile(r"[Qq]"))
+            self.terminal.loop(break_key=re_compile(r"[Qq]"))
         except KeyboardInterrupt:
             pass
         finally:

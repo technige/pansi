@@ -38,7 +38,7 @@ def get_kitty_info(terminal):
     try:
         terminal.write(f"{APC}Gi={identifier},s=1,v=1,a=q,t=d,f=24;AAAA{ST}{CSI}c")
         terminal.flush()
-        match = terminal.loop(until=re_compile(r"\x1B\[\?((\d*)(;(\d*))*)c"))
+        match = terminal.loop(break_key=re_compile(r"\x1B\[\?((\d*)(;(\d*))*)c"))
         if match:
             info["emulation_level"] = int(match.group(2))
         return info

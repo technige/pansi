@@ -435,7 +435,7 @@ class Terminal:
             if callable(listener):
                 listener(event)
 
-    def loop(self, /, until=None, timeout=None):
+    def loop(self, /, break_key=None, timeout=None):
         t0 = monotonic()
         remaining = timeout
         while timeout is None or remaining >= 0:
@@ -448,8 +448,8 @@ class Terminal:
                     char_unit = self._input.read(1)
                 else:
                     break
-            if until:
-                match = until.match(char_unit)
+            if break_key:
+                match = break_key.match(char_unit)
                 if match:
                     # print(f"Found match after {monotonic() - t0}s")
                     return match
@@ -479,7 +479,7 @@ class Terminal:
         if lines == 0 and columns == 0:
             self._output.write(f"{CSI}18t")
             self._output.flush()
-            match = self.loop(until=re_compile(r"\x1B\[8;(\d*);(\d*)t"), timeout=0.025)
+            match = self.loop(break_key=re_compile(r"\x1B\[8;(\d*);(\d*)t"), timeout=0.025)
             if match:
                 lines = int(match.group(1))
                 columns = int(match.group(2))
@@ -489,7 +489,7 @@ class Terminal:
         if pixel_width == 0 and pixel_height == 0:
             self._output.write(f"{CSI}14t")
             self._output.flush()
-            match = self.loop(until=re_compile(r"\x1B\[4;(\d*);(\d*)t"), timeout=0.025)
+            match = self.loop(break_key=re_compile(r"\x1B\[4;(\d*);(\d*)t"), timeout=0.025)
             if match:
                 pixel_height = int(match.group(1))
                 pixel_width = int(match.group(2))
@@ -501,7 +501,7 @@ class Terminal:
     def get_cursor_position(self) -> CursorPosition:
         self._output.write(f"{CSI}6n")
         self._output.flush()
-        match = self.loop(until=re_compile(r"\x1B\[(\d*);(\d*)R"), timeout=0.025)
+        match = self.loop(break_key=re_compile(r"\x1B\[(\d*);(\d*)R"), timeout=0.025)
         if match:
             return CursorPosition(line=int(match.group(1)), column=int(match.group(2)))
         else:

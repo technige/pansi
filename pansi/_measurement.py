@@ -23,7 +23,6 @@ from unicodedata import category, east_asian_width
 from ._codes import BS, HT, ESC, DEL, APC, UNICODE_NEWLINES
 
 
-CursorPosition = namedtuple("CursorPosition", ["line", "column"])
 RectangularArea = namedtuple("RectangularArea", ["lines", "columns", "pixel_width", "pixel_height"])
 
 

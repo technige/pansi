@@ -16,10 +16,11 @@
 # limitations under the License.
 
 
+from collections import namedtuple
 from fcntl import ioctl
 from io import StringIO, TextIOBase
 from os import ctermid, open as os_open, close as os_close, O_RDONLY
-from re import compile as re_compile
+from re import compile as re_compile, Match
 from select import select
 from signal import signal, SIGWINCH
 from struct import pack, unpack
@@ -30,7 +31,7 @@ from tty import setraw, setcbreak
 
 from ._codes import CR, LF, ESC, SS3, CSI, APC, UNICODE_NEWLINES
 from ._sgr import reset
-from ._measurement import CursorPosition, RectangularArea
+from ._measurement import RectangularArea
 
 
 class Event:
@@ -165,12 +166,14 @@ class TerminalInput(TextIOBase):
         if not ch:
             raise StopIteration
         elif ch == CR:
+            # TODO: wait/timeout if next char not instantly available
             seq = [ch]
             if self._peek_char() == LF:
                 ch = self._read_char()
                 seq.append(ch)
             return "".join(seq)
         elif ch == ESC:
+            # TODO: wait/timeout if next char not instantly available
             # Escape sequence
             ch = self._read_char()
             seq = [ESC, ch]
@@ -317,10 +320,11 @@ class TerminalOutput(TextIOBase):
         if not hasattr(stream, "writable") or not callable(stream.writable) or not stream.writable():
             raise ValueError(f"Stream {stream!r} is not writable")
         self._stream = stream
-        self._original_mode = tcgetattr(self._stream)
+        self._original_tty_mode = tcgetattr(self._stream)
         self._closed = False
 
     def __del__(self):
+        self.reset_tty_mode()
         super().__del__()
 
     def _check_closed(self):
@@ -331,16 +335,16 @@ class TerminalOutput(TextIOBase):
         if not self.writable():
             raise OSError("Terminal output is not writable")
 
-    def set_tty_mode(self, value):
-        if value == "raw":
+    def set_tty_mode(self, tty_mode):
+        if tty_mode == "raw":
             setraw(self._stream, TCSAFLUSH)
-        elif value == "cbreak":
+        elif tty_mode == "cbreak":
             setcbreak(self._stream, TCSAFLUSH)
         else:
-            raise ValueError(f"Unsupported tty mode {value!r}")
+            raise ValueError(f"Unsupported tty mode {tty_mode!r}")
 
     def reset_tty_mode(self):
-        tcsetattr(self._stream, TCSAFLUSH, self._original_mode)
+        tcsetattr(self._stream, TCSAFLUSH, self._original_tty_mode)
 
     def flush(self):
         self._stream.flush()
@@ -410,11 +414,22 @@ class TerminalOutput(TextIOBase):
 
 class Terminal:
 
-    def __init__(self, cin=stdin, cout=stdout):
-        self._input = TerminalInput(cin)
-        self._output = TerminalOutput(cout)
+    def __init__(self, full_screen=False, raw=False, input_stream=None, output_stream=None):
+        self._input = TerminalInput(input_stream)
+        self._output = TerminalOutput(output_stream)
+        self._cursor = Cursor(self)
         self._event_listeners = {}
         signal(SIGWINCH, lambda _signal, _frame: self._dispatch_event(Event("resize")))
+        if full_screen:
+            self.screen(buffer="alternate")
+            self.set_tty_mode("raw" if raw else "cbreak")
+
+    def __del__(self):
+        self.close()
+
+    @property
+    def cursor(self):
+        return self._cursor
 
     def add_event_listener(self, event_type, listener):
         self._event_listeners.setdefault(event_type, []).append(listener)
@@ -435,7 +450,7 @@ class Terminal:
             if callable(listener):
                 listener(event)
 
-    def loop(self, /, break_key=None, timeout=None):
+    def loop(self, /, break_key=None, timeout=None) -> Match | str | None:
         """ Run an event-processing loop until either the nominated
         `break_key` is pressed, or a timeout occurs. If neither exit
         condition is specified, the loop will run indefinitely.
@@ -453,10 +468,14 @@ class Terminal:
                 else:
                     break
             if break_key:
-                match = break_key.match(char_unit)
-                if match:
-                    # print(f"Found match after {monotonic() - t0}s")
-                    return match
+                if hasattr(break_key, "match"):
+                    match = break_key.match(char_unit)
+                    if match:
+                        # print(f"Matched break_key after {monotonic() - t0}s")
+                        return match
+                elif char_unit == break_key:
+                    # print(f"Matched break_key after {monotonic() - t0}s")
+                    return char_unit
             # TODO: handle mouse events separately, if possible
             if char_unit.startswith(APC):
                 self._dispatch_event(KeyboardEvent("__apc__", key=char_unit))
@@ -502,38 +521,27 @@ class Terminal:
                 pixel_width = 8 * columns
         return RectangularArea(lines, columns, pixel_width, pixel_height)
 
-    def get_cursor_position(self) -> CursorPosition:
-        self._output.write(f"{CSI}6n")
-        self._output.flush()
-        match = self.loop(break_key=re_compile(r"\x1B\[(\d*);(\d*)R"), timeout=0.025)
-        if match:
-            return CursorPosition(line=int(match.group(1)), column=int(match.group(2)))
-        else:
-            raise OSError("Cursor position unavailable")
-
-    def set_cursor_position(self, /, line, column):
-        self._output.write(f"{CSI}{line};{column}H")
-
     def clear(self):
         self._output.write(f"{CSI}H{CSI}2J")
 
-    def show_alternate_screen(self, mode="cbreak"):
-        self._output.write(f"{CSI}?1049h")
-        self._output.flush()
-        self._output.set_tty_mode(mode)
+    def screen(self, buffer="normal"):
+        if buffer == "alternate":
+            self._output.write(f"{CSI}?1049h")
+            self._output.write(f"{CSI}H{CSI}2J")
+            self._output.flush()
+        elif buffer == "normal":
+            self._output.write(f"{CSI}?1049l")
+            self._output.flush()
 
-    def hide_alternate_screen(self):
+    def set_tty_mode(self, tty_mode):
+        self._output.set_tty_mode(tty_mode)
+
+    def reset_tty_mode(self):
         self._output.reset_tty_mode()
-        self._output.write(f"{CSI}?1049l")
-        self._output.flush()
 
-    def show_cursor(self):
-        self._output.write(f"{CSI}?25h")
-        self._output.flush()
-
-    def hide_cursor(self):
-        self._output.write(f"{CSI}?25l")
-        self._output.flush()
+    def close(self):
+        self.screen(buffer="normal")
+        self._output.reset_tty_mode()
 
     # def keypad_on(self):
     #     self._cout.write(f"{CSI}?1h{ESC}=")
@@ -585,3 +593,34 @@ class Terminal:
 
     def draw(self, image, /, method="auto"):
         raise NotImplementedError
+
+
+class Cursor:
+
+    Position = namedtuple("Position", ["line", "column"])
+
+    def __init__(self, terminal):
+        self._terminal = terminal
+
+    def __del__(self):
+        self.show()
+
+    def show(self):
+        self._terminal.write(f"{CSI}?25h")
+        self._terminal.flush()
+
+    def hide(self):
+        self._terminal.write(f"{CSI}?25l")
+        self._terminal.flush()
+
+    def get_position(self) -> Position:
+        self._terminal.write(f"{CSI}6n")
+        self._terminal.flush()
+        match = self._terminal.loop(break_key=re_compile(r"\x1B\[(\d*);(\d*)R"), timeout=0.025)
+        if match:
+            return Cursor.Position(line=int(match.group(1)), column=int(match.group(2)))
+        else:
+            raise OSError("Cursor position unavailable")
+
+    def set_position(self, /, line, column):
+        self._terminal.write(f"{CSI}{line};{column}H")

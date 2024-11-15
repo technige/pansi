@@ -21,34 +21,30 @@ from re import compile as re_compile
 from pansi import Terminal
 
 
-class Demo:
+class EventLogger:
 
     def __init__(self):
-        self.terminal = Terminal()
+        self.terminal = Terminal(full_screen=True, raw=True)
         self.terminal.add_event_listener("keypress", self.on_keypress)
         self.terminal.add_event_listener("resize", self.on_resize)
 
     def on_keypress(self, event):
-        self.terminal.print(f"Input event {event!r}")
+        self.terminal.print(f"{event!r}")
 
     def on_resize(self, event):
-        self.terminal.print(f"Resize event {event!r}")
+        self.terminal.print(f"{event!r}")
+        self.terminal.print(f"Terminal size = {self.terminal.get_size()!r}")
 
     def run(self):
-        self.terminal.hide_cursor()
-        self.terminal.show_alternate_screen(mode="raw")
+        self.terminal.cursor.hide()
         try:
-            self.terminal.set_cursor_position(0, 0)
-            self.terminal.loop(break_key=re_compile(r"[Qq]"))
+            self.terminal.loop(break_key="\x03")
         except KeyboardInterrupt:
             pass
-        finally:
-            self.terminal.hide_alternate_screen()
-            self.terminal.show_cursor()
 
 
 def main():
-    Demo().run()
+    EventLogger().run()
 
 
 if __name__ == "__main__":

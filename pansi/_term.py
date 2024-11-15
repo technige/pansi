@@ -436,6 +436,10 @@ class Terminal:
                 listener(event)
 
     def loop(self, /, break_key=None, timeout=None):
+        """ Run an event-processing loop until either the nominated
+        `break_key` is pressed, or a timeout occurs. If neither exit
+        condition is specified, the loop will run indefinitely.
+        """
         t0 = monotonic()
         remaining = timeout
         while timeout is None or remaining >= 0:

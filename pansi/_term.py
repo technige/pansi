@@ -455,9 +455,16 @@ class Terminal:
                 self._event_queue.put(KeyboardEvent("keypress", key=char_unit))
 
     def loop(self, /, break_key=None, timeout=None) -> Match | str | None:
-        """ Run an event-processing loop until either the nominated
-        `break_key` is pressed, or a timeout occurs. If neither exit
-        condition is specified, the loop will run indefinitely.
+        """ Run an event-processing loop until either the nominated `break_key`
+        is pressed, or a timeout occurs. If neither exit condition is
+        specified, the loop will run indefinitely.
+
+        Internally, this loop polls the _event_queue. This should be the only
+        function to *read* from the event queue, although events may be added from
+        any thread. This caution sidesteps weird hard-to-trace multithreading
+        effects, and avoids situations such as https://bugs.python.org/issue24283
+        wherein input and output channels can raise RuntimeErrors when used
+        from within signal handlers.
         """
         t0 = monotonic()
         remaining = timeout

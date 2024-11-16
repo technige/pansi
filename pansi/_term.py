@@ -518,18 +518,17 @@ class Terminal:
     def clear(self):
         self._output.write(f"{CSI}H{CSI}2J")
 
-    def screen(self, buffer="normal"):
-        if buffer == "alternate":
-            self._output.write(f"{CSI}?1049h")
-            self._output.flush()
-        elif buffer == "normal":
-            self._output.write(f"{CSI}?1049l")
-            self._output.flush()
-
-    def set_tty_mode(self, tty_mode):
+    def set_full_screen(self, tty_mode="cbreak"):
         self._output.set_tty_mode(tty_mode)
+        self.cursor.hide()
+        self._output.write(f"{CSI}?1049h")
+        self._output.write(f"{CSI}H{CSI}2J")
+        self._output.flush()
 
-    def reset_tty_mode(self):
+    def close(self):
+        self._output.write(f"{CSI}?1049l")
+        self._output.flush()
+        self.cursor.show()
         self._output.reset_tty_mode()
 
     # def keypad_on(self):

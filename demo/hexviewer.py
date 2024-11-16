@@ -57,18 +57,14 @@ class HexViewer:
         self.render()
 
     def run(self):
-        self.terminal.set_tty_mode("cbreak")
-        self.terminal.cursor.hide()
-        self.terminal.screen(buffer="alternate")
+        self.terminal.set_full_screen()
         try:
             self.render()
             self.terminal.loop()
         except KeyboardInterrupt:
             pass
         finally:
-            self.terminal.screen(buffer="normal")
-            self.terminal.cursor.show()
-            self.terminal.reset_tty_mode()
+            self.terminal.close()
 
     def render(self):
         byte_offset = self.line_offset * self.line_width

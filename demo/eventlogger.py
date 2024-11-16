@@ -16,8 +16,6 @@
 # limitations under the License.
 
 
-from re import compile as re_compile
-
 from pansi import Terminal
 
 
@@ -36,18 +34,13 @@ class EventLogger:
         self.terminal.print(f"Terminal size = {self.terminal.get_size()!r}")
 
     def run(self):
-        self.terminal.set_tty_mode("raw")
-        self.terminal.cursor.hide()
-        self.terminal.screen(buffer="alternate")
+        self.terminal.set_full_screen(tty_mode="raw")
         try:
-            self.terminal.clear()
             self.terminal.loop(break_key="\x03")
         except KeyboardInterrupt:
             pass
         finally:
-            self.terminal.screen(buffer="normal")
-            self.terminal.cursor.show()
-            self.terminal.reset_tty_mode()
+            self.terminal.close()
 
 
 def main():

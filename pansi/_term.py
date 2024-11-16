@@ -20,12 +20,14 @@ from collections import namedtuple
 from fcntl import ioctl
 from io import StringIO, TextIOBase
 from os import ctermid, open as os_open, close as os_close, O_RDONLY
+from queue import SimpleQueue
 from re import compile as re_compile, Match
 from select import select
 from signal import signal, SIGWINCH
 from struct import pack, unpack
 from sys import stdin, stdout
 from termios import tcgetattr, tcsetattr, TCSAFLUSH, TIOCGWINSZ
+from threading import Thread
 from time import monotonic
 from tty import setraw, setcbreak
 
@@ -418,8 +420,13 @@ class Terminal:
         self._input = TerminalInput(input_stream)
         self._output = TerminalOutput(output_stream)
         self._cursor = Cursor(self)
+
+        # Any thread can put events on the queue, but they should all be
+        # "got" and processed by the main thread.
+        self._event_queue = SimpleQueue()
         self._event_listeners = {}
-        signal(SIGWINCH, lambda _signal, _frame: self._dispatch_event(Event("resize")))
+        Thread(target=self._input_reader, daemon=True).start()
+        signal(SIGWINCH, lambda _signal, _frame: self._event_queue.put(Event("resize")))
 
     @property
     def cursor(self):
@@ -439,10 +446,13 @@ class Terminal:
             except ValueError:
                 pass  # no such listener
 
-    def _dispatch_event(self, event):
-        for listener in self._event_listeners.get(event.type, []):
-            if callable(listener):
-                listener(event)
+    def _input_reader(self):
+        while True:
+            char_unit = self._input.read(1)
+            if char_unit.startswith(APC):
+                self._event_queue.put(KeyboardEvent("__apc__", key=char_unit))
+            else:
+                self._event_queue.put(KeyboardEvent("keypress", key=char_unit))
 
     def loop(self, /, break_key=None, timeout=None) -> Match | str | None:
         """ Run an event-processing loop until either the nominated
@@ -453,29 +463,26 @@ class Terminal:
         remaining = timeout
         while timeout is None or remaining >= 0:
             if timeout is None:
-                char_unit = self._input.read(1)
+                remaining = None
             else:
                 elapsed = monotonic() - t0
                 remaining = timeout - elapsed
-                if self._input.wait(timeout=max(0, remaining)):
-                    char_unit = self._input.read(1)
-                else:
-                    break
-            if break_key:
+            event = self._event_queue.get(timeout=remaining)
+            if event.type == "keypress" and break_key:
+                # If the break key is hit, this is handled as an alternative to
+                # dispatching the listeners. This will fall through if the
+                # keypress does not match.
                 if hasattr(break_key, "match"):
-                    match = break_key.match(char_unit)
+                    match = break_key.match(event.key)
                     if match:
                         # print(f"Matched break_key after {monotonic() - t0}s")
                         return match
-                elif char_unit == break_key:
+                elif event.key == break_key:
                     # print(f"Matched break_key after {monotonic() - t0}s")
-                    return char_unit
-            # TODO: handle mouse events separately, if possible
-            if char_unit.startswith(APC):
-                self._dispatch_event(KeyboardEvent("__apc__", key=char_unit))
-            else:
-                self._dispatch_event(KeyboardEvent("keypress", key=char_unit))
-        return None
+                    return event.key
+            for listener in self._event_listeners.get(event.type, []):
+                if callable(listener):
+                    listener(event)
 
     def get_info(self):
         info = {}

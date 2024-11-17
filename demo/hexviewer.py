@@ -49,7 +49,7 @@ class HexViewer:
         if event.key == f"{CSI}A" and self.line_offset > 0:
             self.line_offset -= 1
             self.render()
-        elif event.key == f"{CSI}B" and self.line_offset < self.data_lines - self.terminal.get_size().lines + 1:
+        elif event.key == f"{CSI}B" and self.line_offset < self.data_lines - self.terminal.measure().lines + 1:
             self.line_offset += 1
             self.render()
 
@@ -57,7 +57,7 @@ class HexViewer:
         self.render()
 
     def run(self):
-        self.terminal.set_full_screen()
+        self.terminal.screen()
         try:
             self.render()
             self.terminal.loop()
@@ -69,7 +69,7 @@ class HexViewer:
     def render(self):
         byte_offset = self.line_offset * self.line_width
         self.terminal.clear()
-        terminal_size = self.terminal.get_size()
+        terminal_size = self.terminal.measure()
         for line_no, offset in enumerate(range(byte_offset, len(self.data), self.line_width)):
             if line_no < terminal_size.lines - 1:
                 line = self.data[offset:(offset + 16)]

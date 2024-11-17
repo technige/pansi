@@ -31,10 +31,10 @@ class EventLogger:
 
     def on_resize(self, event):
         self.terminal.print(f"{event!r}")
-        self.terminal.print(f"Terminal size = {self.terminal.get_size()!r}")
+        self.terminal.print(f"Terminal size = {self.terminal.measure()!r}")
 
     def run(self):
-        self.terminal.set_full_screen(tty_mode="raw")
+        self.terminal.screen(tty_mode="raw")
         try:
             self.terminal.loop(break_key="\x03")
         except KeyboardInterrupt:

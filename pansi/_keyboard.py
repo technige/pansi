@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
-
+#
 # Copyright 2020, Nigel Small
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,11 +16,4 @@
 # limitations under the License.
 
 
-from ._codes import *
-from ._keyboard import *
-from ._measurement import *
-from ._sgr import *
-from ._term import *
-
-
-__version__ = "2024.11.0"
+ANY_KEY = object()

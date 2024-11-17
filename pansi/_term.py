@@ -16,11 +16,10 @@
 # limitations under the License.
 
 
-from collections import namedtuple
 from fcntl import ioctl
 from io import StringIO, TextIOBase
 from os import ctermid, open as os_open, close as os_close, O_RDONLY
-from queue import SimpleQueue
+from queue import SimpleQueue, Empty
 from re import compile as re_compile, Match
 from select import select
 from signal import signal, SIGWINCH
@@ -32,8 +31,9 @@ from time import monotonic
 from tty import setraw, setcbreak
 
 from ._codes import CR, LF, ESC, SS3, CSI, APC, UNICODE_NEWLINES
+from ._keyboard import ANY_KEY
+from ._measurement import Rect, Screen, Cursor
 from ._sgr import reset
-from ._measurement import RectangularArea
 
 
 class Event:
@@ -420,6 +420,8 @@ class Terminal:
         self._input = TerminalInput(input_stream)
         self._output = TerminalOutput(output_stream)
         self._cursor = Cursor(self)
+        self._screen = None
+        self._response_timeout = 0.05
 
         # Any thread can put events on the queue, but they should all be
         # "got" and processed by the main thread.
@@ -473,23 +475,27 @@ class Terminal:
                 remaining = None
             else:
                 elapsed = monotonic() - t0
-                remaining = timeout - elapsed
-            event = self._event_queue.get(timeout=remaining)
-            if event.type == "keypress" and break_key:
-                # If the break key is hit, this is handled as an alternative to
-                # dispatching the listeners. This will fall through if the
-                # keypress does not match.
-                if hasattr(break_key, "match"):
-                    match = break_key.match(event.key)
-                    if match:
+                remaining = max(0, timeout - elapsed)
+            try:
+                event = self._event_queue.get(timeout=remaining)
+            except Empty:
+                return None
+            else:
+                if event.type == "keypress" and break_key:
+                    # If the break key is hit, this is handled as an alternative to
+                    # dispatching the listeners. This will fall through if the
+                    # keypress does not match.
+                    if hasattr(break_key, "match"):
+                        match = break_key.match(event.key)
+                        if match:
+                            # print(f"Matched break_key after {monotonic() - t0}s")
+                            return match
+                    elif event.key == break_key or break_key is ANY_KEY:
                         # print(f"Matched break_key after {monotonic() - t0}s")
-                        return match
-                elif event.key == break_key:
-                    # print(f"Matched break_key after {monotonic() - t0}s")
-                    return event.key
-            for listener in self._event_listeners.get(event.type, []):
-                if callable(listener):
-                    listener(event)
+                        return event.key
+                for listener in self._event_listeners.get(event.type, []):
+                    if callable(listener):
+                        listener(event)
 
     def get_info(self):
         info = {}
@@ -497,7 +503,7 @@ class Terminal:
         info.update(get_kitty_info(self))
         return info
 
-    def get_size(self) -> RectangularArea:
+    def measure(self, unit="ch") -> (Rect, Rect):
         try:
             buffer = pack('HHHH', 0, 0, 0, 0)
             fd = os_open(ctermid(), O_RDONLY)
@@ -507,37 +513,47 @@ class Terminal:
             lines, columns, pixel_width, pixel_height = 0, 0, 0, 0
         else:
             lines, columns, pixel_width, pixel_height = unpack('HHHH', result)
-        if lines == 0 and columns == 0:
+        if lines == 0 and columns == 0 and unit == "ch":
             self._output.write(f"{CSI}18t")
             self._output.flush()
-            match = self.loop(break_key=re_compile(r"\x1B\[8;(\d*);(\d*)t"), timeout=0.025)
+            match = self.loop(break_key=re_compile(r"\x1B\[8;(\d*);(\d*)t"), timeout=self._response_timeout)
             if match:
                 lines = int(match.group(1))
                 columns = int(match.group(2))
             else:
                 lines = 24
                 columns = 80
-        if pixel_width == 0 and pixel_height == 0:
+        if pixel_width == 0 and pixel_height == 0 and unit == "px":
             self._output.write(f"{CSI}14t")
             self._output.flush()
-            match = self.loop(break_key=re_compile(r"\x1B\[4;(\d*);(\d*)t"), timeout=0.025)
+            match = self.loop(break_key=re_compile(r"\x1B\[4;(\d*);(\d*)t"), timeout=self._response_timeout)
             if match:
                 pixel_height = int(match.group(1))
                 pixel_width = int(match.group(2))
             else:
                 pixel_height = 16 * lines
                 pixel_width = 8 * columns
-        return RectangularArea(lines, columns, pixel_width, pixel_height)
+        if unit == "px":
+            return Rect(0, 0, pixel_width, pixel_height)
+        else:
+            return Rect(0, 0, columns, lines)
 
     def clear(self):
         self._output.write(f"{CSI}H{CSI}2J")
 
-    def set_full_screen(self, tty_mode="cbreak"):
-        self._output.set_tty_mode(tty_mode)
-        self.cursor.hide()
-        self._output.write(f"{CSI}?1049h")
-        self._output.write(f"{CSI}H{CSI}2J")
-        self._output.flush()
+    def screen(self, tty_mode="cbreak"):
+        """ Set up a new, clear screen using the alternate screen buffer. This
+        can be used to initialise a full-screen application, or to transition
+        between pages, such as moving from a title screen to a main screen.
+
+        By default, "cbreak" tty mode is enabled, but "raw" mode can also be
+        selected.
+        """
+        self._output.set_tty_mode(tty_mode=tty_mode)
+        self.cursor.hide()  # TODO: manage cursor mode in more detail
+        self._screen = Screen(self)
+        self._screen.render()
+        return self._screen
 
     def close(self):
         self._output.write(f"{CSI}?1049l")
@@ -595,31 +611,3 @@ class Terminal:
 
     def draw(self, image, /, method="auto"):
         raise NotImplementedError
-
-
-class Cursor:
-
-    Position = namedtuple("Position", ["line", "column"])
-
-    def __init__(self, terminal):
-        self._terminal = terminal
-
-    def show(self):
-        self._terminal.write(f"{CSI}?25h")
-        self._terminal.flush()
-
-    def hide(self):
-        self._terminal.write(f"{CSI}?25l")
-        self._terminal.flush()
-
-    def get_position(self) -> Position:
-        self._terminal.write(f"{CSI}6n")
-        self._terminal.flush()
-        match = self._terminal.loop(break_key=re_compile(r"\x1B\[(\d*);(\d*)R"), timeout=0.025)
-        if match:
-            return Cursor.Position(line=int(match.group(1)), column=int(match.group(2)))
-        else:
-            raise OSError("Cursor position unavailable")
-
-    def set_position(self, /, line, column):
-        self._terminal.write(f"{CSI}{line};{column}H")
